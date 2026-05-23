@@ -546,6 +546,7 @@ export default function App() {
       await setDoc(doc(db, 'users', authUser.uid), newUserObj);
 
       // Send customized high-fidelity confirmation email using Nodemailer API
+      let emailSendErrorMsg = '';
       try {
         const response = await fetch('/api/send-email', {
           method: 'POST',
@@ -560,11 +561,14 @@ export default function App() {
           })
         });
         const mailRes = await response.json();
-        if (mailRes.simulated) {
+        if (!response.ok) {
+          emailSendErrorMsg = mailRes.details || mailRes.error || 'Error SMTP desconocido del servidor.';
+        } else if (mailRes.simulated) {
           setLastSentCode(verificationCode); // Saved to allow instant automatic bypass if testing offline
         }
-      } catch (mailErr) {
+      } catch (mailErr: any) {
         console.error('Error al enviar correo de confirmación de cuenta:', mailErr);
+        emailSendErrorMsg = mailErr.message || 'Error de conexión de red al intentar contactar al servidor de correo.';
       }
 
       setAuthName('');
@@ -573,7 +577,19 @@ export default function App() {
       setAuthConfirmPassword('');
       setVerifyingEmail(emailNormalized);
       setAuthMode('verify');
-      alert('¡Cuenta registrada con éxito! Te enviamos un código de confirmación de 6 dígitos a tu correo para activar tu cuenta.');
+
+      if (emailSendErrorMsg) {
+        alert(
+          `⚠️ ¡Cuenta creada en Firebase pero falló el envío de correo!\n\n` +
+          `Error SMTP del servidor:\n"${emailSendErrorMsg}"\n\n` +
+          `Sugerencias de solución:\n` +
+          `1. Si usás Gmail, debés activar la Verificación en 2 Pasos y generar una "Contraseña de Aplicación" de 16 caracteres. NO uses tu contraseña de login normal en SMTP_PASS.\n` +
+          `2. Asegurá que SMTP_PORT sea 587 (con SMTP_SECURE=false) o 465 (con SMTP_SECURE=true).\n` +
+          `3. Algunos hosts de mail bloquean accesos desde IPs de servidores en la nube como Vercel si no tienen seguridad SSL/TLS bien definida.`
+        );
+      } else {
+        alert('¡Cuenta registrada con éxito! Te enviamos un código de confirmación de 6 dígitos a tu correo para activar tu cuenta.');
+      }
     } catch (err: any) {
       console.error(err);
       const errMsg = (err.message || '').toLowerCase();
@@ -679,6 +695,7 @@ export default function App() {
           
           await updateDoc(userDocRef, { verificationCode: newCode });
 
+          let emailSendErrorMsg = '';
           try {
             const response = await fetch('/api/send-email', {
               method: 'POST',
@@ -693,15 +710,26 @@ export default function App() {
               })
             });
             const mailRes = await response.json();
-            if (mailRes.simulated) {
+            if (!response.ok) {
+              emailSendErrorMsg = mailRes.details || mailRes.error || 'Error SMTP desconocido del servidor.';
+            } else if (mailRes.simulated) {
               setLastSentCode(newCode); // Offline bypass helper
             }
-          } catch (mailErr) {
+          } catch (mailErr: any) {
             console.error('Error al reenviar correo de confirmación de cuenta:', mailErr);
+            emailSendErrorMsg = mailErr.message || 'Error de conexión de red al intentar contactar al servidor de correo.';
           }
 
           setVerificationInputCode('');
-          alert('📬 Código de verificación reenviado con éxito. Por favor, revisá tu bandeja de entrada o spam.');
+          if (emailSendErrorMsg) {
+            alert(
+              `⚠️ ¡Código generado pero falló el envío del correo!\n\n` +
+              `Error SMTP del servidor:\n"${emailSendErrorMsg}"\n\n` +
+              `Por favor, verificá tus secretos de SMTP configurados en Vercel.`
+            );
+          } else {
+            alert('📬 Código de verificación reenviado con éxito. Por favor, revisá tu bandeja de entrada o spam.');
+          }
         }
       } catch (err: any) {
         setAuthError('No se pudo reenviar el correo: ' + err.message);
