@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global safety catch-all
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Reuseable global helpers
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function isSignedIn() { 
+      return request.auth != null; 
+    }
+    
+    function isUserAdmin(uid) {
+      return exists(/databases/$(database)/documents/users/$(uid)) && 
+             get(/databases/$(database)/documents/users/$(uid)).data.isAdmin == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'rodrigo.s@lynchnet.com.ar' || 
+        request.auth.token.email == 'prodeonline.rs@gmail.com'
+      );
+    }
+
+    function incoming() { 
+      return request.resource.data; 
+    }
+    
+    function existing() { 
+      return resource.data; 
+    }
+
+    function isGroupLocked() {
+      return get(/databases/$(database)/documents/locks/global).data.isGroupStageLocked == true;
+    }
+
+    function isKnockoutLocked() {
+      return get(/databases/$(database)/documents/locks/global).data.isKnockoutStageLocked == true;
+    }
+
+    // 1. Users collection
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                    request.auth.uid == userId && 
+                    incoming().id == userId &&
+                    (incoming().isAdmin == false || (incoming().isAdmin == true && isBootstrappedAdmin())); // prevent self-privilege escalation on signup while allowing bootstrapped admins
+      
+      allow update: if isSignedIn() && (
+                      isBootstrappedAdmin() || 
+                      isUserAdmin(request.auth.uid) || (
+                        request.auth.uid == userId && 
+                        incoming().isAdmin == existing().isAdmin && // cannot change admin state
+                        incoming().email == existing().email // email cannot be altered
+                      )
+                    );
+      allow delete: if isBootstrappedAdmin() || isUserAdmin(request.auth.uid);
+      
+      // Predictions subcollection
+      match /predictions/{groupId} {
+        allow read: if isSignedIn(); // allow members to view each other's forecasts for transparency
+        allow create, update: if isSignedIn() && 
+                              request.auth.uid == userId && 
+                              isValidId(groupId) &&
+                              !isGroupLocked(); // blocked once group stage matches lock
+        allow delete: if isSignedIn() && (
+                        (request.auth.uid == userId && !isGroupLocked()) ||
+                        isBootstrappedAdmin() ||
+                        isUserAdmin(request.auth.uid)
+                      );
+      }
+    }
+
+    // Collection Group rule for Predictions
+    match /{path=**}/predictions/{groupId} {
+      allow read: if isSignedIn();
+    }
+
+    // 2. Groups collection
+    match /groups/{groupId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && 
+                    isValidId(groupId) && 
+                    incoming().id == groupId && 
+                    incoming().ownerId == request.auth.uid;
+      
+      allow update: if isSignedIn() && (
+                      isBootstrappedAdmin() || 
+                      isUserAdmin(request.auth.uid) ||
+                      existing().ownerId == request.auth.uid || (
+                        // Regular users can only join themselves to memberIds or requested pending lists
+                        incoming().ownerId == existing().ownerId &&
+                        incoming().id == existing().id &&
+                        incoming().name == existing().name &&
+                        incoming().inviteCode == existing().inviteCode &&
+                        (
+                          // Join standard group
+                          (!existing().requiresApproval && incoming().diff(existing()).affectedKeys().hasOnly(['memberIds'])) ||
+                          // Ask for approval in approval-required group
+                          (existing().requiresApproval && incoming().diff(existing()).affectedKeys().hasOnly(['pendingMemberIds']))
+                        )
+                      )
+                    );
+      allow delete: if isSignedIn() && (
+                      isBootstrappedAdmin() || 
+                      isUserAdmin(request.auth.uid) || 
+                      existing().ownerId == request.auth.uid
+                    );
+    }
+
+    // 3. Matches collection
+    match /matches/{matchId} {
+      allow read: if isSignedIn();
+      allow write: if isBootstrappedAdmin() || isUserAdmin(request.auth.uid);
+    }
+
+    // 4. Locks collection
+    match /locks/{lockId} {
+      allow read: if isSignedIn();
+      allow write: if isBootstrappedAdmin() || isUserAdmin(request.auth.uid);
+    }
+
+    // 5. Extras collection
+    match /extras/{extraId} {
+      allow read: if isSignedIn();
+      allow write: if isBootstrappedAdmin() || isUserAdmin(request.auth.uid);
+    }
+  }
+}

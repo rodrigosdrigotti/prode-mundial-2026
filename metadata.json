@@ -1,0 +1,6 @@
+{
+  "name": "Prode Mundial 2026",
+  "description": "Aplicación web de pronósticos del Mundial 2026 con simulación completa de 50 usuarios, rankings, grupos privados interactivos independientes y bracket oficial de eliminatoria directa.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

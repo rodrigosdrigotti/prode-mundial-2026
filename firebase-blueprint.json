@@ -1,0 +1,115 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile information",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "registerDate": { "type": "string" },
+        "isAdmin": { "type": "boolean" },
+        "scoreByGroup": { "type": "object" },
+        "verified": { "type": "boolean" }
+      },
+      "required": ["id", "name", "email", "registerDate", "isAdmin", "scoreByGroup"]
+    },
+    "Group": {
+      "title": "Group",
+      "description": "Community user groups",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "memberIds": { "type": "array" },
+        "requiresApproval": { "type": "boolean" },
+        "pendingMemberIds": { "type": "array" }
+      },
+      "required": ["id", "name", "inviteCode", "ownerId", "memberIds"]
+    },
+    "Prediction": {
+      "title": "Prediction",
+      "description": "User predictions for matches and extras per group",
+      "type": "object",
+      "properties": {
+        "matches": { "type": "object" },
+        "extras": { "type": "object" }
+      },
+      "required": ["matches", "extras"]
+    },
+    "Match": {
+      "title": "Match",
+      "description": "Information about a specific physical match and its true score",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "group": { "type": "string" },
+        "team1": { "type": "string" },
+        "team2": { "type": "string" },
+        "team1Goals": { "type": "integer" },
+        "team2Goals": { "type": "integer" },
+        "date": { "type": "string" },
+        "time": { "type": "string" },
+        "type": { "type": "string", "enum": ["group", "knockout"] },
+        "nextMatchId": { "type": "string" },
+        "placeholderName1": { "type": "string" },
+        "placeholderName2": { "type": "string" }
+      },
+      "required": ["id", "group", "team1", "team2", "date", "time", "type"]
+    },
+    "Locks": {
+      "title": "Locks",
+      "description": "Global lock state",
+      "type": "object",
+      "properties": {
+        "isGroupStageLocked": { "type": "boolean" },
+        "isKnockoutStageLocked": { "type": "boolean" },
+        "isGroupCreationLocked": { "type": "boolean" },
+        "isKnockoutPhaseVisible": { "type": "boolean" }
+      },
+      "required": ["isGroupStageLocked", "isKnockoutStageLocked", "isGroupCreationLocked", "isKnockoutPhaseVisible"]
+    },
+    "ActualExtras": {
+      "title": "ActualExtras",
+      "description": "Actual results of the extra tournament predictions",
+      "type": "object",
+      "properties": {
+        "championTeamId": { "type": "string" },
+        "topScorer": { "type": "string" },
+        "mvp": { "type": "string" },
+        "surpriseTeamId": { "type": "string" },
+        "disappointmentTeamId": { "type": "string" }
+      },
+      "required": ["championTeamId", "topScorer", "mvp", "surpriseTeamId", "disappointmentTeamId"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profile definitions"
+    },
+    "/users/{userId}/predictions/{groupId}": {
+      "schema": "Prediction",
+      "description": "A user's predictions for a specific group"
+    },
+    "/groups/{groupId}": {
+      "schema": "Group",
+      "description": "Groups of competitive play"
+    },
+    "/matches/{matchId}": {
+      "schema": "Match",
+      "description": "Physical matches registry"
+    },
+    "/locks/global": {
+      "schema": "Locks",
+      "description": "System state locks"
+    },
+    "/extras/global": {
+      "schema": "ActualExtras",
+      "description": "Real life results for MVP, Champion, and surprise teams"
+    }
+  }
+}
