@@ -547,6 +547,7 @@ export default function App() {
 
       // Send customized high-fidelity confirmation email using Nodemailer API
       let emailSendErrorMsg = '';
+      
       try {
         const response = await fetch('/api/send-email', {
           method: 'POST',
@@ -560,15 +561,35 @@ export default function App() {
             code: verificationCode
           })
         });
-        const mailRes = await response.json();
-        if (!response.ok) {
-          emailSendErrorMsg = mailRes.details || mailRes.error || 'Error SMTP desconocido del servidor.';
-        } else if (mailRes.simulated) {
-          setLastSentCode(verificationCode); // Saved to allow instant automatic bypass if testing offline
+      
+        const responseText = await response.text();
+      
+        console.log("SMTP RESPONSE:", responseText);
+      
+        let mailRes: any = {};
+      
+        try {
+          mailRes = JSON.parse(responseText);
+        } catch {
+          throw new Error(responseText);
         }
+      
+        if (!response.ok) {
+          emailSendErrorMsg =
+            mailRes.details ||
+            mailRes.error ||
+            responseText ||
+            'Error SMTP desconocido del servidor.';
+        } else if (mailRes.simulated) {
+          setLastSentCode(verificationCode);
+        }
+      
       } catch (mailErr: any) {
         console.error('Error al enviar correo de confirmación de cuenta:', mailErr);
-        emailSendErrorMsg = mailErr.message || 'Error de conexión de red al intentar contactar al servidor de correo.';
+      
+        emailSendErrorMsg =
+          mailErr.message ||
+          'Error de conexión de red al intentar contactar al servidor de correo.';
       }
 
       setAuthName('');
