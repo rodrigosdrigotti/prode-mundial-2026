@@ -337,23 +337,28 @@ async function startServer() {
       server: { middlewareMode: true },
       appType: "spa",
     });
+
     app.use(vite.middlewares);
+
   } else {
     // Production serving static files
     const distPath = path.join(process.cwd(), "dist");
+
     app.use(express.static(distPath));
+
     app.get("*", (req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🚀 [Server] Prode Online corriendo en http://localhost:${PORT}`);
+    console.log(`🚀 [Server] Prode Online corriendo en puerto ${PORT}`);
   });
 }
 
-if (!process.env.VERCEL) {
-  startServer();
-}
+const PORT = Number(process.env.PORT) || 3000;
+
+// Iniciar servidor SIEMPRE
+startServer();
 
 export default app;
