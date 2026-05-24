@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { User, Group, GroupPredictionStore, Match, TestSimulationReport } from './types';
 import { TEAMS, GROUP_ALPHABETS, GROUP_TEAMS, INITIAL_GROUP_MATCHES, INITIAL_KNOCKOUT_MATCHES } from './data/teamsAndMatches';
 import { runCompleteQASimulation } from './utils/simulator';
@@ -33,8 +33,12 @@ import {
   Menu,
   X,
   Check,
-  Edit3
+  Edit3,
+  AlertCircle,
+  AlertTriangle,
+  Info
 } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
 
 // Firebase imports
 import { 
@@ -126,6 +130,44 @@ const LOCAL_STORAGE_KEYS = {
 };
 
 export default function App() {
+  // Custom styled Toast Notifications State
+  interface ToastMessage {
+    id: string;
+    message: string;
+    type: 'info' | 'success' | 'warn' | 'error';
+  }
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const showToast = useCallback((message: string, type: 'info' | 'success' | 'warn' | 'error' = 'info') => {
+    const id = Math.random().toString(36).substring(2, 9);
+    setToasts((prev) => [...prev, { id, message, type }]);
+    
+    // Auto remove after 6.5 seconds
+    setTimeout(() => {
+      setToasts((prev) => prev.filter((t) => t.id !== id));
+    }, 6500);
+  }, []);
+
+  // Capture and redirect standard window.alert calls to the beautiful in-app toast stack!
+  useEffect(() => {
+    const originalAlert = window.alert;
+    window.alert = (msg: any) => {
+      const str = String(msg);
+      let type: 'info' | 'success' | 'warn' | 'error' = 'info';
+      if (str.includes('⚠️') || str.includes('Error') || str.includes('falló') || str.includes('No se pudo') || str.includes('expiró') || str.includes('invalido') || str.includes('No válido')) {
+        type = 'error';
+      } else if (str.includes('✅') || str.includes('Éxito') || str.includes('éxito') || str.includes('exito') || str.includes('con éxito') || str.includes('correo enviado') || str.includes('reenviado') || str.includes('registrada con éxito')) {
+        type = 'success';
+      } else if (str.includes('📬') || str.includes('¡Hola!') || str.includes('ℹ')) {
+        type = 'info';
+      }
+      showToast(str, type);
+    };
+    return () => {
+      window.alert = originalAlert;
+    };
+  }, [showToast]);
+
   // Navigation State
   const [activePage, setActivePage] = useState<'home' | 'grupos' | 'reglamento' | 'admin' | 'auth'>('home');
   const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
@@ -415,70 +457,47 @@ export default function App() {
   };
 
   // Google Single-Sign-In Handler
-const handleGoogleSignIn = async () => {
-  setAuthError('');
-
-  const provider = new GoogleAuthProvider();
-
-  try {
-
-    const res = await signInWithPopup(auth, provider);
-
-    const authUser = res.user;
-
-    if (authUser) {
-
-      const userDocRef = doc(db, 'users', authUser.uid);
-      const userSnap = await getDoc(userDocRef);
-
-      if (!userSnap.exists()) {
-
-        const isFirstBootstrappedAdmin =
-          authUser.email === 'rodrigo.s@lynchnet.com.ar' ||
-          authUser.email === 'prodeonline.rs@gmail.com';
-
-        const newUser: User = {
-          id: authUser.uid,
-          name:
-            authUser.displayName ||
-            authUser.email?.split('@')[0] ||
-            'Competidor',
-          email: authUser.email || '',
-          registerDate: new Date().toISOString(),
-          isAdmin: isFirstBootstrappedAdmin,
-          scoreByGroup: {},
-          verified: true
-        };
-
-        await setDoc(userDocRef, newUser);
-
-        setCurrentUser(newUser);
-
-      } else {
-
-        setCurrentUser(userSnap.data() as User);
+  const handleGoogleSignIn = async () => {
+    setAuthError('');
+    const provider = new GoogleAuthProvider();
+    try {
+      const res = await signInWithPopup(auth, provider);
+      const authUser = res.user;
+      if (authUser) {
+        const userDocRef = doc(db, 'users', authUser.uid);
+        const userSnap = await getDoc(userDocRef);
+        if (!userSnap.exists()) {
+          const isFirstBootstrappedAdmin = authUser.email === 'rodrigo.s@lynchnet.com.ar' || authUser.email === 'prodeonline.rs@gmail.com';
+          const newUser: User = {
+            id: authUser.uid,
+            name: authUser.displayName || authUser.email?.split('@')[0] || 'Competidor',
+            email: authUser.email || '',
+            registerDate: new Date().toISOString(),
+            isAdmin: isFirstBootstrappedAdmin,
+            scoreByGroup: {},
+            verified: true
+          };
+          await setDoc(userDocRef, newUser);
+          setCurrentUser(newUser);
+        } else {
+          setCurrentUser(userSnap.data() as User);
+        }
+        setActivePage('home');
       }
-
-      setActivePage('home');
-    }
-
   } catch (err: any) {
-
-    // Usuario cerró manualmente el popup Google
-    if (
-      err.code === 'auth/popup-closed-by-user' ||
-      err.code === 'auth/cancelled-popup-request'
-    ) {
-      return;
+      // Usuario cerró manualmente el popup Google
+      if (
+        err.code === 'auth/popup-closed-by-user' ||
+        err.code === 'auth/cancelled-popup-request'
+      ) {
+        return;
+      }
+      console.error(err);
+      setAuthError(
+        err.message || 'Error en autenticación de Google'
+      );
     }
-
-    console.error(err);
-
-    setAuthError(
-      err.message || 'Error en autenticación de Google'
-    );
-  }
-};
+  };
 
   // Email-Password Login handler
   const handleLogin = async (e: React.FormEvent) => {
@@ -1048,7 +1067,7 @@ const handleGoogleSignIn = async () => {
     }
   };
 
-  // Admin capability: Rename team names dynamically
+ // Admin capability: Rename team names dynamically
   const handleUpdateTeamName = (teamId: string, newName: string) => {
     const teamObj = TEAMS[teamId];
     if (teamObj) {
@@ -1220,7 +1239,7 @@ const handleGoogleSignIn = async () => {
     }
   };
 
-  // Admin capability: Modify actual extras category
+ // Admin capability: Modify actual extras category
   const handleUpdateActualExtras = async (field: string, value: string) => {
     try {
       await updateDoc(doc(db, 'extras', 'global'), { [field]: value });
@@ -2120,6 +2139,67 @@ const handleGoogleSignIn = async () => {
         })}
       </nav>
 
+      {/* Toast Notification Container Overlay */}
+      <div className="fixed top-4 right-4 z-[9999] flex flex-col gap-3 w-full max-w-sm pointer-events-none px-4 md:px-0">
+        <AnimatePresence>
+          {toasts.map((toast) => {
+            let borderColor = 'border-sky-500/30';
+            let iconColor = 'text-sky-400';
+            let icon = <Info className="w-5 h-5" />;
+            let bgColor = 'bg-slate-900/95';
+
+            if (toast.type === 'success') {
+              borderColor = 'border-emerald-500/40';
+              iconColor = 'text-emerald-400';
+              icon = <CheckCircle className="w-5 h-5" />;
+              bgColor = 'bg-slate-900/95';
+            } else if (toast.type === 'error') {
+              borderColor = 'border-rose-500/45';
+              iconColor = 'text-rose-400';
+              icon = <AlertCircle className="w-5 h-5" />;
+              bgColor = 'bg-slate-900/95';
+            } else if (toast.type === 'warn') {
+              borderColor = 'border-amber-500/40';
+              iconColor = 'text-amber-400';
+              icon = <AlertTriangle className="w-5 h-5" />;
+              bgColor = 'bg-slate-900/95';
+            }
+
+            return (
+              <motion.div
+                key={toast.id}
+                initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.15 } }}
+                className={`pointer-events-auto p-4 rounded-xl border ${borderColor} ${bgColor} shadow-2xl flex items-start gap-3 backdrop-blur-md relative overflow-hidden`}
+              >
+                {/* Decorative left vertical bar indicator */}
+                <span className={`absolute left-0 top-0 bottom-0 w-1 ${
+                  toast.type === 'success' ? 'bg-emerald-500' :
+                  toast.type === 'error' ? 'bg-rose-500' :
+                  toast.type === 'warn' ? 'bg-amber-500' : 'bg-sky-400'
+                }`} />
+
+                <div className={`mt-0.5 shrink-0 ${iconColor}`}>
+                  {icon}
+                </div>
+
+                <div className="flex-1 text-xs text-slate-100 font-sans font-medium whitespace-pre-wrap leading-relaxed">
+                  {toast.message}
+                </div>
+
+                <button
+                  onClick={() => setToasts((prev) => prev.filter((t) => t.id !== toast.id))}
+                  className="p-1 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer shrink-0"
+                  title="Cerrar"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </motion.div>
+            );
+          })}
+        </AnimatePresence>
+      </div>
     </div>
   );
 }
