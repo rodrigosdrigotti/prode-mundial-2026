@@ -39,6 +39,7 @@ interface AdminPanelProps {
   onDeleteUser: (userId: string) => void;
   onTriggerSimulation: () => void;
   onResetData: () => void;
+  onForceRegenerateMatches?: () => void; // Nueva acción agregada
   actualExtras: {
     championTeamId: string;
     topScorer: string;
@@ -67,6 +68,7 @@ export default function AdminPanel({
   onDeleteUser,
   onTriggerSimulation,
   onResetData,
+  onForceRegenerateMatches, // Acción recibida
   actualExtras,
   onUpdateActualExtras,
   onUpdateGroupName,
@@ -144,6 +146,17 @@ export default function AdminPanel({
             <Play className="w-3.5 h-3.5" />
             Simulación 100% (QA)
           </button>
+
+          {onForceRegenerateMatches && (
+            <button
+              onClick={onForceRegenerateMatches}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs rounded-lg transition-transform focus:ring focus:ring-sky-500/50"
+              title="Regenerar todos los partidos del mundial en Firestore"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              Regenerar Partidos Eliminados
+            </button>
+          )}
           
           <button
             onClick={onResetData}
