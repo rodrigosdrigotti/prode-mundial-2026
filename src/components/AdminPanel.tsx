@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Match, User } from '../types';
+import { Match, User, Gruop } from '../types';
 import { TEAMS, GROUP_ALPHABETS } from '../data/teamsAndMatches';
 import {
   Settings,
@@ -17,12 +17,16 @@ import {
   CheckCircle,
   RefreshCw,
   Play,
-  Hammer
+  Hammer,
+  Edit3,
+  X,
+  Check
 } from 'lucide-react';
 
 interface AdminPanelProps {
   matches: Match[];
   users: Record<string, User>;
+  groups: Group[];
   isGroupStageLocked: boolean;
   isKnockoutStageLocked: boolean;
   isGroupCreationLocked: boolean;
@@ -43,11 +47,14 @@ interface AdminPanelProps {
     disappointmentTeamId: string;
   };
   onUpdateActualExtras: (field: string, value: string) => void;
+  onUpdateGroupName: (groupId: string, newName: string) => void;
+  onDeleteGroup: (groupId: string) => void;
 }
 
 export default function AdminPanel({
   matches,
   users,
+  groups = [],
   isGroupStageLocked,
   isKnockoutStageLocked,
   isGroupCreationLocked,
@@ -61,13 +68,18 @@ export default function AdminPanel({
   onTriggerSimulation,
   onResetData,
   actualExtras,
-  onUpdateActualExtras
+  onUpdateActualExtras,
+  onUpdateGroupName,
+  onDeleteGroup
 }: AdminPanelProps) {
-  const [activeTab, setActiveTab] = useState<'matches' | 'teams' | 'users' | 'locks' | 'extras'>('matches');
+  const [activeTab, setActiveTab] = useState<'matches' | 'teams' | 'users' | 'locks' | 'extras' | 'groups'>('matches');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('A');
   const [editingTeamId, setEditingTeamId] = useState<string | null>(null);
   const [editingTeamName, setEditingTeamName] = useState<string>('');
   const [confirmClearMatchId, setConfirmClearMatchId] = useState<string | null>(null);
+  const [editingGroupId, setEditingGroupId] = useState<string | null>(null);
+  const [editingGroupName, setEditingGroupName] = useState<string>('');
+  const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
   // Handle goals input directly from state
@@ -149,6 +161,7 @@ export default function AdminPanel({
           { id: 'matches', label: 'Editar Resultados & Partidos' },
           { id: 'teams', label: 'Nombres de Equipos' },
           { id: 'users', label: 'Gestionar Usuarios' },
+          { id: 'groups', label: 'Gestionar Grupos del Prode' },
           { id: 'locks', label: 'Bloqueos & Generación de Bracket' },
           { id: 'extras', label: 'Resultados Extras Oficiales' }
         ].map((tab) => (
@@ -158,7 +171,7 @@ export default function AdminPanel({
             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
               activeTab === tab.id
                 ? 'bg-sky-500 text-white shadow-lg'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-705'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-750'
             }`}
           >
             {tab.label}
@@ -432,7 +445,133 @@ export default function AdminPanel({
         </div>
       )}
 
-      {/* 4. LOCKDOWNS & AUTOMATIONS */}
+      {/* 4. GESTIONAR GRUPOS DEL PRODE */}
+      {activeTab === 'groups' && (
+        <div className="space-y-4 animate-fade-in">
+          <div className="overflow-x-auto rounded-xl border border-slate-800">
+            <table className="w-full text-left border-collapse text-xs md:text-sm">
+              <thead>
+                <tr className="bg-slate-800 text-slate-400 font-mono text-[10px] uppercase tracking-wider">
+                  <th className="p-3.5">Nombre del Grupo</th>
+                  <th className="p-3.5">Creador / Dueño</th>
+                  <th className="p-3.5">Código de Invitación</th>
+                  <th className="p-3.5 text-center">Miembros</th>
+                  <th className="p-3.5 text-center">Aprobación</th>
+                  <th className="p-3.5 text-right">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-800 bg-slate-900/40">
+                {groups.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="p-8 text-center text-slate-500 text-xs italic font-semibold">
+                      ¡Aún no se han creado grupos de Prode en el sistema!
+                    </td>
+                  </tr>
+                ) : (
+                  groups.map((g) => {
+                    const owner = users[g.ownerId];
+                    const isEditing = editingGroupId === g.id;
+
+                    return (
+                      <tr key={g.id} className="hover:bg-slate-850/60 transition-colors">
+                        <td className="p-3.5 font-bold text-white">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5 max-w-[240px]">
+                              <input
+                                type="text"
+                                value={editingGroupName}
+                                onChange={(e) => setEditingGroupName(e.target.value)}
+                                className="bg-slate-950 border border-sky-400 rounded px-2 py-1 text-xs text-white uppercase focus:outline-none font-bold flex-1"
+                                placeholder="Nombre de grupo"
+                              />
+                              <button
+                                onClick={() => {
+                                  if (!editingGroupName.trim()) {
+                                    alert('El nombre del grupo no puede estar vacío.');
+                                    return;
+                                  }
+                                  onUpdateGroupName(g.id, editingGroupName.trim());
+                                  setEditingGroupId(null);
+                                }}
+                                className="p-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded cursor-pointer"
+                                title="Guardar"
+                              >
+                                <Check className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => setEditingGroupId(null)}
+                                className="p-1.5 bg-slate-800 hover:bg-slate-705 text-slate-400 rounded cursor-pointer"
+                                title="Cancelar"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-white font-bold">{g.name}</span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-slate-300 font-mono">
+                          {owner ? (
+                            <div>
+                              <p className="font-semibold text-slate-200 text-xs">{owner.name}</p>
+                              <p className="text-[10px] text-slate-500 font-mono">{owner.email}</p>
+                            </div>
+                          ) : (
+                            <div className="text-[11px]">
+                              <span className="text-white font-semibold">Dueño por Defecto (Admin)</span>
+                              <p className="text-[9.5px]/none text-slate-500 font-mono truncate max-w-[130px]">{g.ownerId}</p>
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3.5 font-mono text-slate-300 uppercase tracking-wider font-bold">{g.inviteCode}</td>
+                        <td className="p-3.5 text-center font-bold text-slate-200">
+                          {g.memberIds?.length || 0}
+                        </td>
+                        <td className="p-3.5 text-center text-[10px] font-semibold">
+                          {g.requiresApproval ? (
+                            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/20 font-bold">
+                              Aprobación ({ (g.pendingMemberIds || []).length } pendiente)
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-bold">
+                              Auto-unir (Abierto)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3.5 text-right">
+                          <div className="flex justify-end gap-1.5">
+                            {!isEditing && (
+                              <button
+                                onClick={() => {
+                                  setEditingGroupId(g.id);
+                                  setEditingGroupName(g.name);
+                                }}
+                                className="p-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 cursor-pointer"
+                                title="Editar Nombre"
+                              >
+                                <Edit3 className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => setGroupToDelete(g)}
+                              className="p-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/30 text-rose-450 hover:text-white rounded-lg transition-colors cursor-pointer"
+                              title="Eliminar Grupo"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* 5. LOCKDOWNS & AUTOMATIONS */}
       {activeTab === 'locks' && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
           {/* Automated knockout generator card */}
@@ -715,6 +854,58 @@ export default function AdminPanel({
                 className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-500/15 transition-colors cursor-pointer"
               >
                 Eliminar Cuenta
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* CONFIRM DELETE GROUP CUSTOM MODAL (COMPATIBLE WITH IFRAME) */}
+      {groupToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm animate-fade-in">
+          <div className="bg-slate-900 border border-rose-500/30 rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-5">
+            <div className="flex items-center gap-3 text-rose-500">
+              <div className="p-2.5 bg-rose-500/10 rounded-xl border border-rose-500/25">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white uppercase tracking-tight">Confirmar Eliminación de Grupo</h3>
+                <p className="text-[10px] text-rose-400 font-mono">Esta acción eliminará el grupo de Firebase permanentemente</p>
+              </div>
+            </div>
+
+            <div className="bg-slate-950/60 p-4 rounded-xl space-y-1 border border-slate-800">
+              <p className="text-xs text-slate-400 font-medium">Grupo seleccionado para eliminar:</p>
+              <p className="text-sm font-black text-rose-300">{groupToDelete.name}</p>
+              <p className="text-xs text-slate-400 font-mono">ID: {groupToDelete.id}</p>
+            </div>
+
+            <div className="space-y-2 text-xs text-slate-300 leading-relaxed bg-rose-500/5 p-4 rounded-xl border border-rose-500/10">
+              <p className="font-semibold text-rose-400">¿Estás seguro? Al eliminar la liga:</p>
+              <ul className="list-disc pl-5 space-y-1 text-[11px] text-slate-400">
+                <li>Se purgará permanentemente la liga/grupo de la base de datos Firestore.</li>
+                <li>Los {groupToDelete.memberIds?.length || 0} miembros asignados perderán el acceso a esta liga de forma instantánea.</li>
+                <li>El código de invitación <strong>{groupToDelete.inviteCode}</strong> quedará inhabilitado de inmediato.</li>
+              </ul>
+            </div>
+
+            <div className="flex gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setGroupToDelete(null)}
+                className="flex-1 py-2 rounded-xl bg-slate-800 hover:bg-slate-705 text-slate-300 hover:text-white font-bold text-xs uppercase tracking-wider transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  onDeleteGroup(groupToDelete.id);
+                  setGroupToDelete(null);
+                }}
+                className="flex-1 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-lg shadow-rose-500/15 transition-colors cursor-pointer"
+              >
+                Eliminar Grupo
               </button>
             </div>
           </div>
