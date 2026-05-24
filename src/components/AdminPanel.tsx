@@ -39,7 +39,7 @@ interface AdminPanelProps {
   onDeleteUser: (userId: string) => void;
   onTriggerSimulation: () => void;
   onResetData: () => void;
-  onForceRegenerateMatches?: () => void; // Nueva acción agregada
+  onForceRegenerateMatches?: () => void;
   actualExtras: {
     championTeamId: string;
     topScorer: string;
@@ -68,7 +68,7 @@ export default function AdminPanel({
   onDeleteUser,
   onTriggerSimulation,
   onResetData,
-  onForceRegenerateMatches, // Acción recibida
+  onForceRegenerateMatches,
   actualExtras,
   onUpdateActualExtras,
   onUpdateGroupName,
