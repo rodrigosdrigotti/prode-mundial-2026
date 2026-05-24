@@ -415,38 +415,70 @@ export default function App() {
   };
 
   // Google Single-Sign-In Handler
-  const handleGoogleSignIn = async () => {
-    setAuthError('');
-    const provider = new GoogleAuthProvider();
-    try {
-      const res = await signInWithPopup(auth, provider);
-      const authUser = res.user;
-      if (authUser) {
-        const userDocRef = doc(db, 'users', authUser.uid);
-        const userSnap = await getDoc(userDocRef);
-        if (!userSnap.exists()) {
-          const isFirstBootstrappedAdmin = authUser.email === 'rodrigo.s@lynchnet.com.ar' || authUser.email === 'prodeonline.rs@gmail.com';
-          const newUser: User = {
-            id: authUser.uid,
-            name: authUser.displayName || authUser.email?.split('@')[0] || 'Competidor',
-            email: authUser.email || '',
-            registerDate: new Date().toISOString(),
-            isAdmin: isFirstBootstrappedAdmin,
-            scoreByGroup: {},
-            verified: true
-          };
-          await setDoc(userDocRef, newUser);
-          setCurrentUser(newUser);
-        } else {
-          setCurrentUser(userSnap.data() as User);
-        }
-        setActivePage('home');
+const handleGoogleSignIn = async () => {
+  setAuthError('');
+
+  const provider = new GoogleAuthProvider();
+
+  try {
+
+    const res = await signInWithPopup(auth, provider);
+
+    const authUser = res.user;
+
+    if (authUser) {
+
+      const userDocRef = doc(db, 'users', authUser.uid);
+      const userSnap = await getDoc(userDocRef);
+
+      if (!userSnap.exists()) {
+
+        const isFirstBootstrappedAdmin =
+          authUser.email === 'rodrigo.s@lynchnet.com.ar' ||
+          authUser.email === 'prodeonline.rs@gmail.com';
+
+        const newUser: User = {
+          id: authUser.uid,
+          name:
+            authUser.displayName ||
+            authUser.email?.split('@')[0] ||
+            'Competidor',
+          email: authUser.email || '',
+          registerDate: new Date().toISOString(),
+          isAdmin: isFirstBootstrappedAdmin,
+          scoreByGroup: {},
+          verified: true
+        };
+
+        await setDoc(userDocRef, newUser);
+
+        setCurrentUser(newUser);
+
+      } else {
+
+        setCurrentUser(userSnap.data() as User);
       }
-    } catch (err: any) {
-      console.error(err);
-      setAuthError(err.message || 'Error en autenticación de Google');
+
+      setActivePage('home');
     }
-  };
+
+  } catch (err: any) {
+
+    // Usuario cerró manualmente el popup Google
+    if (
+      err.code === 'auth/popup-closed-by-user' ||
+      err.code === 'auth/cancelled-popup-request'
+    ) {
+      return;
+    }
+
+    console.error(err);
+
+    setAuthError(
+      err.message || 'Error en autenticación de Google'
+    );
+  }
+};
 
   // Email-Password Login handler
   const handleLogin = async (e: React.FormEvent) => {
