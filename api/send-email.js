@@ -1,6 +1,6 @@
-const nodemailer = require("nodemailer");
+import nodemailer from "nodemailer";
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -35,11 +35,11 @@ module.exports = async (req, res) => {
     });
 
   } catch (error) {
-    console.error(error);
+    console.error("SMTP ERROR:", error);
 
     return res.status(500).json({
       success: false,
       error: String(error),
     });
   }
-};
+}
