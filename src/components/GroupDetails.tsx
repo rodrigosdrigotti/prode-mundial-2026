@@ -40,6 +40,7 @@ interface GroupDetailsProps {
   isKnockoutPhaseVisible?: boolean;
   onUpdatePrediction: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
   onUpdateExtrasPrediction: (field: string, value: string) => void;
+  onSaveGroupPredictions?: (newMatches: Record<string, MatchPrediction> | null, newExtras: ExtrasPrediction | null) => Promise<void>;
   actualExtras: {
     championTeamId: string;
     topScorer: string;
@@ -66,6 +67,7 @@ export default function GroupDetails({
   isKnockoutPhaseVisible = false,
   onUpdatePrediction,
   onUpdateExtrasPrediction,
+  onSaveGroupPredictions,
   actualExtras,
   globalGroups,
   onAcceptPendingMember,
@@ -159,13 +161,27 @@ export default function GroupDetails({
     setHasUnsavedChanges(true);
   };
 
-  const handleSaveLocalMatches = () => {
+  const handleSaveLocalMatches = async () => {
+    const batchUpdates: Record<string, MatchPrediction> = {};
     activeMatches.forEach((m) => {
       const draft = draftMatches[m.id] || { team1Goals: null, team2Goals: null };
-      onUpdatePrediction(m.id, draft.team1Goals, draft.team2Goals);
+      batchUpdates[m.id] = { team1Goals: draft.team1Goals, team2Goals: draft.team2Goals };
     });
-    setHasUnsavedChanges(false);
-    alert('💾 ¡Predicciones guardadas exitosamente para la sección actual!');
+
+    try {
+      if (onSaveGroupPredictions) {
+        await onSaveGroupPredictions(batchUpdates, null);
+      } else {
+        activeMatches.forEach((m) => {
+          const draft = draftMatches[m.id] || { team1Goals: null, team2Goals: null };
+          onUpdatePrediction(m.id, draft.team1Goals, draft.team2Goals);
+        });
+      }
+      setHasUnsavedChanges(false);
+      alert('💾 ¡Predicciones guardadas exitosamente para la sección actual!');
+    } catch (err) {
+      alert('Error al guardar predicciones: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   // Extras draft state
@@ -211,12 +227,20 @@ export default function GroupDetails({
     setHasUnsavedExtrasChanges(true);
   };
 
-  const handleSaveExtras = () => {
-    (Object.keys(draftExtras) as Array<keyof ExtrasPrediction>).forEach((field) => {
-      onUpdateExtrasPrediction(field, draftExtras[field]);
-    });
-    setHasUnsavedExtrasChanges(false);
-    alert('✨ ¡Pronósticos Extras guardados exitosamente!');
+  const handleSaveExtras = async () => {
+    try {
+      if (onSaveGroupPredictions) {
+        await onSaveGroupPredictions(null, draftExtras);
+      } else {
+        (Object.keys(draftExtras) as Array<keyof ExtrasPrediction>).forEach((field) => {
+          onUpdateExtrasPrediction(field, draftExtras[field]);
+        });
+      }
+      setHasUnsavedExtrasChanges(false);
+      alert('✨ ¡Pronósticos Extras guardados exitosamente!');
+    } catch (err) {
+      alert('Error al guardar pronósticos extras: ' + (err instanceof Error ? err.message : String(err)));
+    }
   };
 
   // Group standings (only relevant if active tab is a letter A to L)
