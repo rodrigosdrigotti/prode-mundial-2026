@@ -1746,6 +1746,7 @@ export default function App() {
               <AdminPanel
                 matches={matches}
                 users={users}
+                groups={groups}
                 isGroupStageLocked={locks.isGroupStageLocked}
                 isKnockoutStageLocked={locks.isKnockoutStageLocked}
                 isGroupCreationLocked={locks.isGroupCreationLocked}
@@ -1760,6 +1761,8 @@ export default function App() {
                 onResetData={handleResetData}
                 actualExtras={actualExtras}
                 onUpdateActualExtras={handleUpdateActualExtras}
+                onUpdateGroupName={handleUpdateGroupName}
+                onDeleteGroup={handleDeleteGroup}
               />
             ) : (
               <div className="text-center py-12 max-w-sm mx-auto bg-slate-900/40 rounded-xl space-y-4">
@@ -2200,6 +2203,7 @@ export default function App() {
           })}
         </AnimatePresence>
       </div>
+
     </div>
   );
 }
