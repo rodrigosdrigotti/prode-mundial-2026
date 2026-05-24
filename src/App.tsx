@@ -190,6 +190,7 @@ export default function App() {
   const [users, setUsers] = useState<Record<string, User>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [predictions, setPredictions] = useState<Record<string, Record<string, GroupPredictionStore>>>({});
+  const [isCollectionGroupFailed, setIsCollectionGroupFailed] = useState(false); // <--- NUEVO
   const [matches, setMatches] = useState<Match[]>([]);
   
   // Game Lock states
@@ -411,7 +412,12 @@ export default function App() {
         }
       });
       setPredictions(nextPredictions);
-    }, (err) => handleFirestoreError(err, OperationType.GET, 'collectionGroup:predictions'));
+      setIsCollectionGroupFailed(false); // <--- NUEVO: Consulta exitosa
+    }, (err) => {
+      // NUEVO: Captura el error de Vercel/Firebase y activa el fallback de forma silenciosa
+      console.warn("⚠️ Fallback activado: No se pudo usar collectionGroup('predictions') (requiere índices). Usando sincronización directa por miembro.", err);
+      setIsCollectionGroupFailed(true);
+    });
 
     // G. Sync simulation report if saved of client browser
     const savedSimReport = localStorage.getItem(LOCAL_STORAGE_KEYS.SIM_REPORT);
@@ -428,6 +434,58 @@ export default function App() {
       unsubPreds();
     };
   }, [currentUser?.id, currentUser?.isAdmin]);
+
+  // Fallback real-time predictions sync when collectionGroup is blocked or unindexed (e.g. custom Vercel database)
+  useEffect(() => {
+    if (!currentUser || !isCollectionGroupFailed || groups.length === 0) return;
+
+    // Determine which groups we want to sync predictions for: 
+    // 1. Fully sync active group
+    // 2. Fully sync groups where the current user is a member (to display preview rankings correctly)
+    const groupsToSync = groups.filter(
+      (g) => g.id === activeGroupId || g.memberIds?.includes(currentUser.id)
+    );
+
+    const unsubscribers: (() => void)[] = [];
+    const syncedKeys = new Set<string>(); // Keep track to prevent redundant listeners [memberId_groupId]
+
+    groupsToSync.forEach((g) => {
+      const gId = g.id;
+      const memberIds = g.memberIds || [];
+      
+      memberIds.forEach((mId) => {
+        const key = `${mId}_${gId}`;
+        if (syncedKeys.has(key)) return;
+        syncedKeys.add(key);
+
+        const docRef = doc(db, 'users', mId, 'predictions', gId);
+        const unsub = onSnapshot(docRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data() as GroupPredictionStore;
+            setPredictions((prev) => {
+              const next = { ...prev };
+              if (!next[mId]) {
+                next[mId] = {};
+              }
+              const userGroupPredsPrev = next[mId][gId];
+              if (JSON.stringify(userGroupPredsPrev) === JSON.stringify(data)) {
+                return prev;
+              }
+              next[mId] = { ...next[mId], [gId]: data };
+              return next;
+            });
+          }
+        }, (err) => {
+          console.warn(`[Fallback Sync Prediction Error] Failed to sync ${key}:`, err);
+        });
+        unsubscribers.push(unsub);
+      });
+    });
+
+    return () => {
+      unsubscribers.forEach((unsub) => unsub());
+    };
+  }, [currentUser?.id, isCollectionGroupFailed, activeGroupId, groups]);
 
   // Helper inside groups list
   const getActiveGroupObj = () => {
