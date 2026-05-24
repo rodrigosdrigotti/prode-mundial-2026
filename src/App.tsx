@@ -1344,6 +1344,36 @@ export default function App() {
     alert('¡Limpieza completada con éxito!');
   };
 
+  // FORCE REGENERATE DELETED MATCHES IN FIRESTORE
+  const handleForceRegenerateMatches = async () => {
+    if (!currentUser?.isAdmin) {
+      alert('Solo los administradores pueden forzar la regeneración de los partidos.');
+      return;
+    }
+    const confirmRegen = confirm(
+      '⚠️ ¿Estás seguro/a de que querés regenerar todos los partidos en Firebase?\n\n' +
+      'Esto sobrescribirá o agregará los 72 partidos predeterminados (fase de grupos y eliminatorias).\n' +
+      'Los resultados reales cargados de estos partidos volverán a estar vacíos.'
+    );
+    if (!confirmRegen) return;
+
+    try {
+      const batch = writeBatch(db);
+      const initialMatchesList = [
+        ...INITIAL_GROUP_MATCHES,
+        ...INITIAL_KNOCKOUT_MATCHES
+      ];
+      initialMatchesList.forEach((m) => {
+        batch.set(doc(db, 'matches', m.id), m);
+      });
+      await batch.commit();
+      alert('✅ ¡Todos los partidos oficiales han sido regenerados y restaurados con éxito en la base de datos de Firestore!');
+    } catch (err) {
+      console.error(err);
+      alert('No se pudieron regenerar los partidos: ' + (err instanceof Error ? err.message : String(err)));
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#001D3D] font-sans flex flex-col relative pb-20 md:pb-6 overflow-x-hidden text-slate-100">
       
