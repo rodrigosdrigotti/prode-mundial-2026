@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Group, GroupPredictionStore, Match, TestSimulationReport } from './types';
-import { TEAMS, GROUP_ALPHABETS, GROUP_TEAMS, INITIAL_GROUP_MATCHES, INITIAL_KNOCKOUT_MATCHES } from './data/teamsAndMatches';
+import { User, Group, GroupPredictionStore, Match, TestSimulationReport, MatchPrediction, ExtrasPrediction } from './types';
 import { runCompleteQASimulation } from './utils/simulator';
 import { calculateGroupStandings } from './utils/tiebreakers';
 import Regulation from './components/Regulation';
@@ -1107,6 +1107,60 @@ export default function App() {
     }
   };
 
+  // Save bulk predictions (written all at once to avoid racing Firestore operations)
+  const handleSaveGroupPredictions = async (
+    newMatches: Record<string, MatchPrediction> | null,
+    newExtras: ExtrasPrediction | null
+  ) => {
+    if (!currentUser || !activeGroupId) return;
+
+    const predRef = doc(db, 'users', currentUser.id, 'predictions', activeGroupId);
+    
+    const userPreds = predictions[currentUser.id] || {};
+    const groupPreds = userPreds[activeGroupId] || {
+      matches: {},
+      extras: { championTeamId: '', topScorer: '', mvp: '', surpriseTeamId: '', disappointmentTeamId: '' }
+    };
+
+    const finalMatches = newMatches 
+      ? { ...groupPreds.matches, ...newMatches }
+      : groupPreds.matches;
+      
+    const finalExtras = newExtras 
+      ? { ...groupPreds.extras, ...newExtras }
+      : groupPreds.extras;
+
+    const nextGroupPreds: GroupPredictionStore = {
+      matches: finalMatches,
+      extras: finalExtras
+    };
+
+    // Optimistically update local predictions state
+    setPredictions((prev) => {
+      const next = { ...prev };
+      if (!next[currentUser.id]) {
+        next[currentUser.id] = {};
+      }
+      next[currentUser.id][activeGroupId] = nextGroupPreds;
+      return next;
+    });
+
+    try {
+      await setDoc(predRef, nextGroupPreds);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `users/${currentUser.id}/predictions/${activeGroupId}`);
+      // Revert optimistic update
+      setPredictions((prev) => {
+        const next = { ...prev };
+        if (next[currentUser.id] && next[currentUser.id][activeGroupId]) {
+          next[currentUser.id][activeGroupId] = groupPreds;
+        }
+        return next;
+      });
+      throw err;
+    }
+  };
+
   // Admin capabilities: Save official match result in system
   const handleUpdateMatchActualResult = async (matchId: string, team1Goals: number | null, team2Goals: number | null) => {
     try {
@@ -1785,6 +1839,7 @@ export default function App() {
                         isKnockoutPhaseVisible={locks.isKnockoutPhaseVisible ?? false}
                         onUpdatePrediction={handleUpdatePrediction}
                         onUpdateExtrasPrediction={handleUpdateExtrasPrediction}
+                        onSaveGroupPredictions={handleSaveGroupPredictions}
                         actualExtras={actualExtras}
                         globalGroups={groups}
                         onAcceptPendingMember={handleAcceptPendingUser}
