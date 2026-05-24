@@ -1847,6 +1847,7 @@ export default function App() {
                 onDeleteUser={handleDeleteUser}
                 onTriggerSimulation={handleTriggerSimulation}
                 onResetData={handleResetData}
+                onForceRegenerateMatches={handleForceRegenerateMatches}
                 actualExtras={actualExtras}
                 onUpdateActualExtras={handleUpdateActualExtras}
                 onUpdateGroupName={handleUpdateGroupName}
