@@ -94,17 +94,13 @@ service cloud.firestore {
                       isBootstrappedAdmin() || 
                       isUserAdmin(request.auth.uid) ||
                       existing().ownerId == request.auth.uid || (
-                        // Regular users can only join themselves to memberIds or requested pending lists
+                        // Regular users can only join themselves or leave by modifying memberIds or pendingMemberIds
                         incoming().ownerId == existing().ownerId &&
                         incoming().id == existing().id &&
                         incoming().name == existing().name &&
                         incoming().inviteCode == existing().inviteCode &&
-                        (
-                          // Join standard group
-                          (!existing().requiresApproval && incoming().diff(existing()).affectedKeys().hasOnly(['memberIds'])) ||
-                          // Ask for approval in approval-required group
-                          (existing().requiresApproval && incoming().diff(existing()).affectedKeys().hasOnly(['pendingMemberIds']))
-                        )
+                        incoming().requiresApproval == existing().requiresApproval &&
+                        incoming().diff(existing()).affectedKeys().hasOnly(['memberIds', 'pendingMemberIds'])
                       )
                     );
       allow delete: if isSignedIn() && (
