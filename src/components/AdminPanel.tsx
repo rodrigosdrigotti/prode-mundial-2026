@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Match, User, Gruop } from '../types';
+import { Match, User, Group } from '../types';
 import { TEAMS, GROUP_ALPHABETS } from '../data/teamsAndMatches';
 import {
   Settings,
@@ -18,9 +18,11 @@ import {
   RefreshCw,
   Play,
   Hammer,
+  Users,
   Edit3,
   X,
-  Check
+  Check,
+  Coffee
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -50,7 +52,17 @@ interface AdminPanelProps {
   onUpdateActualExtras: (field: string, value: string) => void;
   onUpdateGroupName: (groupId: string, newName: string) => void;
   onDeleteGroup: (groupId: string) => void;
+  cafecitoUsername: string;
+  mpAlias: string;
+  mpCvu?: string;
+  cafecitoEnabled: boolean;
+  onUpdateCafecitoSettings: (
+    cafecitoUsername: string,
+    mpAlias: string,
+    cafecitoEnabled: boolean
+  ) => void;
 }
+
 
 export default function AdminPanel({
   matches,
@@ -72,7 +84,11 @@ export default function AdminPanel({
   actualExtras,
   onUpdateActualExtras,
   onUpdateGroupName,
-  onDeleteGroup
+  onDeleteGroup,
+  cafecitoUsername,
+  mpAlias,
+  cafecitoEnabled,
+  onUpdateCafecitoSettings
 }: AdminPanelProps) {
   const [activeTab, setActiveTab] = useState<'matches' | 'teams' | 'users' | 'locks' | 'extras' | 'groups'>('matches');
   const [selectedGroupFilter, setSelectedGroupFilter] = useState<string>('A');
@@ -83,6 +99,19 @@ export default function AdminPanel({
   const [editingGroupName, setEditingGroupName] = useState<string>('');
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // Cafecito & Mercado Pago local edit states (synced with props on render)
+  const [localCafecitoUsername, setLocalCafecitoUsername] = useState(cafecitoUsername || 'rodrigos');
+  const [localMpAlias, setLocalMpAlias] = useState(mpAlias || 'prodeonline-rs.mp');
+  const [localCafecitoEnabled, setLocalCafecitoEnabled] = useState(cafecitoEnabled !== false);
+  const [isSavingCafecito, setIsSavingCafecito] = useState(false);
+
+  // Sync state modifications dynamically
+  React.useEffect(() => {
+    setLocalCafecitoUsername(cafecitoUsername || 'prodeonline-rs');
+    setLocalMpAlias(mpAlias || 'prodeonline-rs.mp');
+    setLocalCafecitoEnabled(cafecitoEnabled !== false);
+  }, [cafecitoUsername, mpAlias, cafecitoEnabled]);
 
   // Handle goals input directly from state
   const handleGoalsChange = (matchId: string, isTeam1: boolean, valueStr: string) => {
@@ -720,6 +749,101 @@ export default function AdminPanel({
                 </button>
               </div>
 
+            </div>
+          </div>
+
+          {/* Donaciones & cafecito configuration card */}
+          <div className="bg-slate-850 p-5 rounded-xl border border-slate-800 space-y-4 mt-6">
+            <h4 className="font-bold text-sm text-amber-450 flex items-center gap-1.5 uppercase">
+              <Coffee className="w-4 h-4 text-amber-400" />
+              Configuración de Cafecito & Donaciones
+            </h4>
+            <p className="text-xs text-slate-450 leading-relaxed">
+              Personalizá tus enlaces de Cafecito.app y tu cuenta de Mercado Pago (CVU o Alias) para que aparezcan en el widget flotante interactivo para contribuciones.
+            </p>
+            
+            <div className="space-y-4 text-xs pt-1">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-slate-350 font-semibold font-mono uppercase tracking-wider text-[10px]">Mostrar / Ocultar botón flotante de Cafecito</label>
+                <div className="flex justify-between items-center p-3 bg-slate-900/60 rounded-lg border border-slate-800">
+                  <div>
+                    <p className="font-semibold text-white">Botón Donación Flotante</p>
+                    <p className="text-[10px] text-slate-450">Si está habilitado, los participantes verán un ícono de taza de café interactivo.</p>
+                  </div>
+                  <button
+                    onClick={() => setLocalCafecitoEnabled(!localCafecitoEnabled)}
+                    className={`flex items-center gap-1 px-3 py-1.5 rounded font-black text-[10px] transition-colors ${
+                      localCafecitoEnabled
+                        ? 'bg-amber-950/70 text-amber-300 border border-amber-500/30'
+                        : 'bg-rose-950/70 text-rose-300 border border-rose-500/30'
+                    }`}
+                  >
+                    {localCafecitoEnabled ? (
+                      <>
+                        <Check className="w-3 h-3" /> HABILITADO
+                      </>
+                    ) : (
+                      <>
+                        <X className="w-3 h-3" /> DESHABILITADO
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-slate-350 font-semibold font-mono uppercase tracking-wider text-[10px]">Usuario Cafecito.app</label>
+                  <input
+                    type="text"
+                    value={localCafecitoUsername}
+                    onChange={(e) => setLocalCafecitoUsername(e.target.value.trim().toString())}
+                    placeholder="Ej: rodrigos"
+                    className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-white font-mono text-xs focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[9.5px] text-slate-500 font-mono mt-0.5">
+                    Link: https://cafecito.app/{localCafecitoUsername || 'usuario'}
+                  </span>
+                </div>
+
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-slate-350 font-semibold font-mono uppercase tracking-wider text-[10px]">Mercado Pago Alias</label>
+                  <input
+                    type="text"
+                    value={localMpAlias}
+                    onChange={(e) => setLocalMpAlias(e.target.value.trim().toString())}
+                    placeholder="Ej: prodeonline-rs.mp"
+                    className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-white font-mono text-xs focus:border-amber-500 focus:outline-none"
+                  />
+                  <span className="text-[9.5px] text-slate-500 font-mono mt-0.5">Clave corta de transferencia</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setIsSavingCafecito(true);
+                    try {
+                      await onUpdateCafecitoSettings(
+                        localCafecitoUsername,
+                        localMpAlias,
+                        localCafecitoEnabled
+                      );
+                      alert('☕ ¡Ajustes de Cafecito y Mercado Pago guardados con éxito!');
+                    } catch (err) {
+                      alert('Error al guardar ajustes de donaciones: ' + err);
+                    } finally {
+                      setIsSavingCafecito(false);
+                    }
+                  }}
+                  disabled={isSavingCafecito}
+                  className="px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-bold rounded-lg transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-amber-500/10 cursor-pointer disabled:opacity-50 text-xs"
+                >
+                  <Coffee className="w-3.5 h-3.5" />
+                  {isSavingCafecito ? 'Guardando...' : 'Guardar Ajustes de Donación'}
+                </button>
+              </div>
             </div>
           </div>
         </div>
