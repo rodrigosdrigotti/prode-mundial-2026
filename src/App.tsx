@@ -12,6 +12,7 @@ import Regulation from './components/Regulation';
 import MyGroups from './components/MyGroups';
 import GroupDetails from './components/GroupDetails';
 import AdminPanel from './components/AdminPanel';
+import CafecitoFloatingWidget from './components/CafecitoFloatingWidget';
 // @ts-ignore
 import bgProde from './assets/images/bg_prode_1779565282229.png';
 import {
@@ -198,7 +199,10 @@ export default function App() {
     isGroupStageLocked: false,
     isKnockoutStageLocked: false,
     isGroupCreationLocked: false,
-    isKnockoutPhaseVisible: false
+    isKnockoutPhaseVisible: false,
+    cafecitoUsername: 'rodrigos',
+    mpAlias: 'prodeonline-rs.mp',
+    cafecitoEnabled: true
   });
 
   // Ground truth actual extras
@@ -371,13 +375,20 @@ export default function App() {
     // D. Sync Global Locks
     const unsubLocks = onSnapshot(doc(db, 'locks', 'global'), (docSnap) => {
       if (docSnap.exists()) {
-        setLocks(docSnap.data() as any);
+        const data = docSnap.data();
+        setLocks((prev) => ({
+          ...prev,
+          ...data
+        }));
       } else if (currentUser.isAdmin) {
         setDoc(doc(db, 'locks', 'global'), {
           isGroupStageLocked: false,
           isKnockoutStageLocked: false,
           isGroupCreationLocked: false,
-          isKnockoutPhaseVisible: false
+          isKnockoutPhaseVisible: false,
+          cafecitoUsername: 'rodrigos',
+          mpAlias: 'prodeonline-rs.mp',
+          cafecitoEnabled: true
         });
       }
     }, (err) => handleFirestoreError(err, OperationType.GET, 'locks/global'));
@@ -1262,6 +1273,24 @@ export default function App() {
     }
   };
 
+  // Admin capability: Update Cafecito and Mercado Pago configurations
+  const handleUpdateCafecitoSettings = async (
+    cafecitoUsername: string,
+    mpAlias: string,
+    cafecitoEnabled: boolean
+  ) => {
+    const locksRef = doc(db, 'locks', 'global');
+    try {
+      await updateDoc(locksRef, {
+        cafecitoUsername,
+        mpAlias,
+        cafecitoEnabled,
+      });
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'locks/global');
+    }
+  };
+
   // Admin capability: Delete user from list (purges profile, group associations and subcollection predictions)
   const handleDeleteUser = async (userId: string) => {
     const targetUser = users[userId];
@@ -1907,6 +1936,10 @@ export default function App() {
                 onUpdateActualExtras={handleUpdateActualExtras}
                 onUpdateGroupName={handleUpdateGroupName}
                 onDeleteGroup={handleDeleteGroup}
+                cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
+                mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
+                cafecitoEnabled={locks.cafecitoEnabled ?? true}
+                onUpdateCafecitoSettings={handleUpdateCafecitoSettings}
               />
             ) : (
               <div className="text-center py-12 max-w-sm mx-auto bg-slate-900/40 rounded-xl space-y-4">
@@ -2347,6 +2380,13 @@ export default function App() {
           })}
         </AnimatePresence>
       </div>
+
+      {/* CAFECITO / MERCADO PAGO DONATION FLOATING WIDGET */}
+      <CafecitoFloatingWidget
+        cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
+        mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
+        enabled={locks.cafecitoEnabled ?? true}
+      />
 
     </div>
   );
