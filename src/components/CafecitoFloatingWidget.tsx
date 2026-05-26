@@ -98,7 +98,7 @@ export default function CafecitoFloatingWidget({
                 <div className="text-[11px] font-sans py-2 px-3.5 bg-amber-500/10 rounded-lg border border-amber-500/20 text-amber-200 flex items-start gap-2 leading-relaxed">
                   <Heart className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
                   <span>
-                    💛 Cada aporte ayuda un montón. ¡Gracias por bancar el proyecto!
+                    Cada aporte ayuda un montón. ¡Gracias por bancar el proyecto!
                   </span>
                 </div>
 
