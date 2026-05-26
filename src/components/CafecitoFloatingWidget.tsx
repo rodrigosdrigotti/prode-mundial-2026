@@ -92,7 +92,7 @@ export default function CafecitoFloatingWidget({
               {/* Description Body */}
               <div className="p-6 space-y-5 text-xs text-slate-300 leading-relaxed font-sans">
                 <p>
-                  Si disfrutás el Mundial con amigos y grupos, podés colaborar con un cafecito o una transferencia. 💙
+                  Si disfrutás el Mundial con amigos y grupos, podés colaborar con un cafecito o una transferencia. 💙🤍💙
                 </p>
 
                 <div className="text-[11px] font-sans py-2 px-3.5 bg-amber-500/10 rounded-lg border border-amber-500/20 text-amber-200 flex items-start gap-2 leading-relaxed">
