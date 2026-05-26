@@ -85,26 +85,26 @@ export default function CafecitoFloatingWidget({
                   <h4 className="text-white font-black text-lg flex items-center gap-1.5 uppercase tracking-wide">
                     ¿Te copa el Prode? ☕
                   </h4>
-                  <span className="text-[10.5px] font-mono text-amber-400 font-bold uppercase tracking-widest block">Contribuciones del Prode</span>
+                  <span className="text-[10.5px] font-mono text-amber-400 font-bold uppercase tracking-widest block">Ayudanos a seguir mejorándolo</span>
                 </div>
               </div>
 
               {/* Description Body */}
               <div className="p-6 space-y-5 text-xs text-slate-300 leading-relaxed font-sans">
                 <p>
-                  Si este prode te ayuda a divertirte, competir y vibrar cada partido junto a amigos o familiares, podés sumarte a bancar los costos del servidor, la base de datos Firestore y las actualizaciones en vivo de las tablas.
+                  Si disfrutás el Mundial con amigos y grupos, podés colaborar con un cafecito o una transferencia. 💙
                 </p>
 
                 <div className="text-[11px] font-sans py-2 px-3.5 bg-amber-500/10 rounded-lg border border-amber-500/20 text-amber-200 flex items-start gap-2 leading-relaxed">
                   <Heart className="w-4 h-4 text-amber-400 shrink-0 mt-0.5 animate-pulse" />
                   <span>
-                    Toda contribución, por más leve que parezca, ayuda a financiar la infraestructura del Prode. ¡Muchísimas gracias por el aguante! 🙌
+                    💛 Cada aporte ayuda un montón. ¡Gracias por bancar el proyecto!
                   </span>
                 </div>
 
                 {/* Option 1: Cafecito.app Button */}
                 <div className="space-y-2">
-                  <p className="font-bold text-white uppercase text-[10px] tracking-wider font-mono text-slate-400">Opción 1: Cafecito.app (Mercado Pago / Tarjeta)</p>
+                  <p className="font-bold text-white uppercase text-[10px] tracking-wider font-mono text-slate-400">Opción 1: Cafecito (Mercado Pago / Tarjeta)</p>
                   <a
                     href={cafecitoUrl}
                     target="_blank"
