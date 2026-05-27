@@ -802,7 +802,7 @@ export default function AdminPanel({
                     className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-white font-mono text-xs focus:border-amber-500 focus:outline-none"
                   />
                   <span className="text-[9.5px] text-slate-500 font-mono mt-0.5">
-                    Link: https://cafecito.app/{localCafecitoUsername || 'usuario'}
+                    Link: https://cafecito.app/{localCafecitoUsername || 'prodeonline-rs'}
                   </span>
                 </div>
 
