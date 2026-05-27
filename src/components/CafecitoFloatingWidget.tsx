@@ -10,7 +10,7 @@ interface CafecitoFloatingWidgetProps {
 }
 
 export default function CafecitoFloatingWidget({
-  cafecitoUsername = 'rodrigos',
+  cafecitoUsername = 'prodeonline-rs',
   mpAlias = 'prodeonline-rs.mp',
   enabled = true
 }: CafecitoFloatingWidgetProps) {
