@@ -200,7 +200,7 @@ export default function App() {
     isKnockoutStageLocked: false,
     isGroupCreationLocked: false,
     isKnockoutPhaseVisible: false,
-    cafecitoUsername: 'rodrigos',
+    cafecitoUsername: 'prodeonline-rs',
     mpAlias: 'prodeonline-rs.mp',
     cafecitoEnabled: true
   });
@@ -386,7 +386,7 @@ export default function App() {
           isKnockoutStageLocked: false,
           isGroupCreationLocked: false,
           isKnockoutPhaseVisible: false,
-          cafecitoUsername: 'rodrigos',
+          cafecitoUsername: 'prodeonline-rs',
           mpAlias: 'prodeonline-rs.mp',
           cafecitoEnabled: true
         });
@@ -1936,7 +1936,7 @@ export default function App() {
                 onUpdateActualExtras={handleUpdateActualExtras}
                 onUpdateGroupName={handleUpdateGroupName}
                 onDeleteGroup={handleDeleteGroup}
-                cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
+                cafecitoUsername={locks.cafecitoUsername ?? 'prodeonline-rs'}
                 mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
                 cafecitoEnabled={locks.cafecitoEnabled ?? true}
                 onUpdateCafecitoSettings={handleUpdateCafecitoSettings}
@@ -2383,7 +2383,7 @@ export default function App() {
 
       {/* CAFECITO / MERCADO PAGO DONATION FLOATING WIDGET */}
       <CafecitoFloatingWidget
-        cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
+        cafecitoUsername={locks.cafecitoUsername ?? 'prodeonline-rs'}
         mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
         enabled={locks.cafecitoEnabled ?? true}
       />
