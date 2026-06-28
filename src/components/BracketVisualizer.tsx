@@ -15,6 +15,7 @@ interface BracketVisualizerProps {
   isLocked: boolean;
   onUpdatePrediction?: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
   onUpdateActualResult?: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
+  currentStage?: string;
 }
 
 export default function BracketVisualizer({
@@ -23,7 +24,8 @@ export default function BracketVisualizer({
   isAdmin,
   isLocked,
   onUpdatePrediction,
-  onUpdateActualResult
+  onUpdateActualResult,
+  currentStage
 }: BracketVisualizerProps) {
   const [svgPaths, setSvgPaths] = React.useState<string[]>([]);
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -483,23 +485,38 @@ export default function BracketVisualizer({
       {/* Grid view of chosen matches for current KO stage */}
       <div className="space-y-4">
         <h4 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-          Partidos Programados
+          Partidos Programados ({currentStage || 'Todos'})
         </h4>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {matches.length === 0 ? (
-            <div className="col-span-full text-center py-12 bg-slate-900/20 rounded-2xl border border-slate-800">
-              <p className="text-slate-400 text-sm">
-                Aún no se han generado los enfrentamientos para esta fase eliminatoria.
-              </p>
-              {isAdmin && (
-                <p className="text-xs text-sky-400 mt-1 font-mono">
-                  Presioná el botón de "Generar Eliminatorias" en el panel Admin para poblar los cruces.
-                </p>
-              )}
-            </div>
-          ) : (
-            matches.map((m) => renderMatchCard(m))
-          )}
+          {(() => {
+            const getMatchNum = (idStr: string) => {
+              if (idStr === 'k2_third') return 1;
+              if (idStr === 'k2_final') return 2;
+              const numMatch = idStr.match(/\d+$/);
+              return numMatch ? parseInt(numMatch[0], 10) : 0;
+            };
+
+            const filteredAndSorted = matches
+              .filter((m) => m.type === 'knockout' && (!currentStage || m.group === currentStage))
+              .sort((a, b) => getMatchNum(a.id) - getMatchNum(b.id));
+
+            if (filteredAndSorted.length === 0) {
+              return (
+                <div className="col-span-full text-center py-12 bg-slate-900/20 rounded-2xl border border-slate-800">
+                  <p className="text-slate-400 text-sm">
+                    Aún no se han generado los enfrentamientos para esta fase eliminatoria.
+                  </p>
+                  {isAdmin && (
+                    <p className="text-xs text-sky-400 mt-1 font-mono">
+                      Presioná el botón de "Generar Eliminatorias" en el panel Admin para poblar los cruces.
+                    </p>
+                  )}
+                </div>
+              );
+            }
+
+            return filteredAndSorted.map((m) => renderMatchCard(m));
+          })()}
         </div>
       </div>
     </div>
