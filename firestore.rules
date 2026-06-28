@@ -37,11 +37,11 @@ service cloud.firestore {
     }
 
     function isGroupLocked() {
-      return get(/databases/$(database)/documents/locks/global).data.isGroupStageLocked == true;
+      return get(/databases/$(database)/documents/locks/global).data.get('isGroupStageLocked', false) == true;
     }
 
     function isKnockoutLocked() {
-      return get(/databases/$(database)/documents/locks/global).data.isKnockoutStageLocked == true;
+      return get(/databases/$(database)/documents/locks/global).data.get('isKnockoutStageLocked', false) == true;
     }
 
     // 1. Users collection
@@ -69,7 +69,9 @@ service cloud.firestore {
                               request.auth.uid == userId && 
                               isValidId(groupId) && (
                                 !isGroupLocked() || 
-                                !isKnockoutLocked()
+                                !isKnockoutLocked() ||
+                                isUserAdmin(request.auth.uid) ||
+                                isBootstrappedAdmin()
                               );
         allow delete: if isSignedIn() && (
                         (request.auth.uid == userId && !isGroupLocked()) ||
