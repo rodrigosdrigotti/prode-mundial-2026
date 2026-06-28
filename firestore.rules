@@ -67,8 +67,10 @@ service cloud.firestore {
         allow read: if isSignedIn(); // allow members to view each other's forecasts for transparency
         allow create, update: if isSignedIn() && 
                               request.auth.uid == userId && 
-                              isValidId(groupId) &&
-                              !isGroupLocked(); // blocked once group stage matches lock
+                              isValidId(groupId) && (
+                                !isGroupLocked() || 
+                                !isKnockoutLocked()
+                              );
         allow delete: if isSignedIn() && (
                         (request.auth.uid == userId && !isGroupLocked()) ||
                         isBootstrappedAdmin() ||
