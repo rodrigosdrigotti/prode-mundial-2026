@@ -25,17 +25,147 @@ export default function BracketVisualizer({
   onUpdatePrediction,
   onUpdateActualResult
 }: BracketVisualizerProps) {
-  // Group matches by phase
-  const getMatchesOfPhase = (phase: string) => {
-    return matches.filter((m) => m.group === phase);
-  };
+  const [svgPaths, setSvgPaths] = React.useState<string[]>([]);
+  const containerRef = React.useRef<HTMLDivElement>(null);
 
-  const p16 = getMatchesOfPhase('16avos');
-  const p8 = getMatchesOfPhase('8vos');
-  const p4 = getMatchesOfPhase('4tos');
-  const pSemi = getMatchesOfPhase('Semifinal');
-  const pThird = getMatchesOfPhase('3er y 4to puesto');
-  const pFinal = getMatchesOfPhase('Final');
+  const updatePaths = React.useCallback(() => {
+    if (!containerRef.current) return;
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const paths: string[] = [];
+
+    matches.forEach((m) => {
+      if (!m.nextMatchId) return;
+
+      const currentEl = document.getElementById(`bracket-match-${m.id}`);
+      const nextEl = document.getElementById(`bracket-match-${m.nextMatchId}`);
+
+      if (currentEl && nextEl) {
+        const rect = currentEl.getBoundingClientRect();
+        const nextRect = nextEl.getBoundingClientRect();
+
+        const matchNum = parseInt(m.id.replace(/[^\d]/g, ''), 10);
+        const isLeft = m.id.startsWith('k32_')
+          ? matchNum <= 8
+          : m.id.startsWith('k16_')
+          ? matchNum <= 4
+          : m.id.startsWith('k8_')
+          ? matchNum <= 2
+          : m.id === 'k4_1';
+
+        // Compute output point from current match (facing towards the center)
+        const xOut = isLeft
+          ? rect.right - containerRect.left
+          : rect.left - containerRect.left;
+        const yOut = rect.top + rect.height / 2 - containerRect.top;
+
+        // Compute input point into next match (facing away from the center)
+        const xIn = isLeft
+          ? nextRect.left - containerRect.left
+          : nextRect.right - containerRect.left;
+        const yIn = nextRect.top + nextRect.height / 2 - containerRect.top;
+
+        // Draw an elegant T-bracket orthogonal path
+        const xMid = (xOut + xIn) / 2;
+        const path = `M ${xOut} ${yOut} H ${xMid} V ${yIn} H ${xIn}`;
+        paths.push(path);
+      }
+    });
+
+    setSvgPaths(paths);
+  }, [matches]);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      updatePaths();
+    }, 150);
+
+    window.addEventListener('resize', updatePaths);
+    return () => {
+      clearTimeout(timer);
+      window.removeEventListener('resize', updatePaths);
+    };
+  }, [updatePaths, matches]);
+
+  const renderBracketMatchNode = (matchId: string, side: 'left' | 'right' | 'center') => {
+    const m = matches.find((match) => match.id === matchId);
+    if (!m) {
+      return (
+        <div className="w-48 p-2.5 bg-slate-900/40 rounded-xl border border-dashed border-slate-800 text-center text-[10px] text-slate-500 italic">
+          Pendiente de definición
+        </div>
+      );
+    }
+
+    const t1 = TEAMS[m.team1];
+    const t2 = TEAMS[m.team2];
+
+    const isT1Winner = m.team1Goals !== null && m.team2Goals !== null && m.team1Goals > m.team2Goals;
+    const isT2Winner = m.team1Goals !== null && m.team2Goals !== null && m.team2Goals > m.team1Goals;
+
+    // Find the user prediction to show a tiny badge or indicator
+    const pred = userPredictions[m.id];
+    const hasPred = pred && (pred.team1Goals !== null || pred.team2Goals !== null);
+
+    return (
+      <div
+        id={`bracket-match-${m.id}`}
+        key={m.id}
+        className="w-48 bg-slate-900/90 hover:bg-slate-850 border border-slate-800/80 hover:border-sky-500/40 rounded-xl p-2.5 shadow-xl transition-all relative group cursor-pointer"
+        onClick={() => {
+          const el = document.getElementById(`detail-match-${m.id}`);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            el.classList.add('ring-2', 'ring-sky-500', 'ring-offset-2', 'ring-offset-slate-900');
+            setTimeout(() => {
+              el.classList.remove('ring-2', 'ring-sky-500', 'ring-offset-2', 'ring-offset-slate-900');
+            }, 2000);
+          }
+        }}
+      >
+        <div className="absolute -top-2 left-3 px-1.5 py-0.5 rounded bg-slate-950 border border-slate-800 text-[8px] font-mono text-slate-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity z-10">
+          {m.id.toUpperCase()}
+        </div>
+
+        {hasPred && (
+          <div className="absolute top-1 right-1 w-1.5 h-1.5 rounded-full bg-sky-400" title="Predicción registrada" />
+        )}
+
+        <div className="space-y-1.5">
+          {/* Team 1 */}
+          <div className="flex items-center justify-between gap-1.5 min-w-0">
+            <div className={`flex items-center gap-1.5 min-w-0 ${isT2Winner ? 'opacity-40' : ''}`}>
+              <span className="text-base shrink-0">{t1?.emoji || '❔'}</span>
+              <span className={`text-[11px] font-semibold truncate ${isT1Winner ? 'text-amber-400 font-bold' : 'text-slate-200'}`}>
+                {t1?.name || m.placeholderName1 || 'TBD'}
+              </span>
+            </div>
+            {m.team1Goals !== null && (
+              <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border ${isT1Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'}`}>
+                {m.team1Goals}
+              </span>
+            )}
+          </div>
+
+          <div className="h-px bg-slate-800/80" />
+
+          {/* Team 2 */}
+          <div className="flex items-center justify-between gap-1.5 min-w-0">
+            <div className={`flex items-center gap-1.5 min-w-0 ${isT1Winner ? 'opacity-40' : ''}`}>
+              <span className="text-base shrink-0">{t2?.emoji || '❔'}</span>
+              <span className={`text-[11px] font-semibold truncate ${isT2Winner ? 'text-amber-400 font-bold' : 'text-slate-200'}`}>
+                {t2?.name || m.placeholderName2 || 'TBD'}
+              </span>
+            </div>
+            {m.team2Goals !== null && (
+              <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border ${isT2Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'}`}>
+                {m.team2Goals}
+              </span>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   const renderTeamNameWithEmoji = (teamId: string, placeholder: string | undefined) => {
     const team = TEAMS[teamId];
@@ -93,8 +223,9 @@ export default function BracketVisualizer({
 
     return (
       <div
+        id={`detail-match-${match.id}`}
         key={match.id}
-        className="bg-slate-800/80 rounded-xl p-4 border border-slate-700 hover:border-sky-500/30 transition-all flex flex-col gap-3 shadow-lg"
+        className="bg-slate-800/80 rounded-xl p-4 border border-slate-700 hover:border-sky-500/30 transition-all flex flex-col gap-3 shadow-lg scroll-mt-24"
       >
         <div className="flex justify-between items-center text-xs font-mono text-slate-400 border-b border-slate-700/65 pb-2">
           <span>{match.id.toUpperCase()}</span>
@@ -222,131 +353,129 @@ export default function BracketVisualizer({
   return (
     <div className="space-y-8">
       {/* Visual Bracket Flow Container */}
-      <div className="hidden lg:block bg-slate-900/50 backdrop-blur-md rounded-2xl border border-sky-500/10 p-6 overflow-x-auto shadow-2xl">
+      <div className="hidden lg:block bg-slate-900/40 backdrop-blur-md rounded-2xl border border-sky-500/10 p-6 overflow-x-auto shadow-2xl relative">
         <h3 className="text-sm font-semibold text-slate-300 mb-6 font-mono tracking-wider uppercase flex items-center gap-2">
           <Trophy className="w-4 h-4 text-yellow-400 animate-pulse" />
           Vista Gráfica del Árbol de Eliminatorias (Cruces Oficiales)
         </h3>
 
-        <div className="flex gap-8 justify-between min-w-[1100px]">
-          {/* Phase: 16avos */}
-          <div className="flex-1 flex flex-col justify-around gap-4">
-            <h4 className="text-center font-bold text-xs font-mono text-slate-400 bg-slate-800/80 py-1.5 rounded-lg border border-slate-700">16AVOS DE FINAL</h4>
-            {p16.slice(0, 8).map((m) => (
-              <div key={m.id} className="p-2 bg-slate-850 rounded-lg border border-slate-700 text-xs scale-95 origin-left">
-                <p className="truncate text-slate-300 font-semibold">{TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</p>
-                <div className="h-px bg-slate-700 my-1" />
-                <p className="truncate text-slate-300 font-semibold">{TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</p>
-              </div>
+        {/* Symmetrical Bracket Container */}
+        <div ref={containerRef} className="relative min-w-[1750px] p-4 select-none">
+          {/* Symmetrical SVG Connections Overlay */}
+          <svg className="absolute inset-0 w-full h-full pointer-events-none z-0">
+            {svgPaths.map((pathStr, index) => (
+              <path
+                key={index}
+                d={pathStr}
+                fill="none"
+                stroke="#0ea5e9"
+                strokeWidth="1.75"
+                strokeOpacity="0.45"
+                className="transition-all duration-300"
+              />
             ))}
+          </svg>
+
+          {/* Grid Headers */}
+          <div className="grid grid-cols-9 gap-4 text-center border-b border-slate-800/80 pb-4 mb-6 relative z-10">
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">16vos de Final</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">8vos de Final</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">Cuartos</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">Semifinal</div>
+            <div className="text-xs font-black font-sans tracking-widest text-amber-400 uppercase flex items-center justify-center gap-1">
+              <Trophy className="w-4 h-4 text-yellow-400 animate-pulse" />
+              FINAL
+            </div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">Semifinal</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">Cuartos</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">8vos de Final</div>
+            <div className="text-[10px] font-black font-sans tracking-widest text-slate-400 uppercase">16vos de Final</div>
           </div>
 
-          <div className="flex items-center text-slate-600">
-            <ArrowRight className="w-4 h-4" />
-          </div>
+          {/* Bracket Content Columns */}
+          <div className="grid grid-cols-9 gap-4 relative z-10">
+            {/* Column 1: 16vos Left (8 matches: k32_1 to k32_8) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k32_1', 'left')}
+              {renderBracketMatchNode('k32_2', 'left')}
+              {renderBracketMatchNode('k32_3', 'left')}
+              {renderBracketMatchNode('k32_4', 'left')}
+              {renderBracketMatchNode('k32_5', 'left')}
+              {renderBracketMatchNode('k32_6', 'left')}
+              {renderBracketMatchNode('k32_7', 'left')}
+              {renderBracketMatchNode('k32_8', 'left')}
+            </div>
 
-          {/* Phase: 8vos */}
-          <div className="flex-1 flex flex-col justify-around gap-6 py-4">
-            <h4 className="text-center font-bold text-xs font-mono text-slate-400 bg-slate-800/80 py-1.5 rounded-lg border border-slate-700">OCTAVOS</h4>
-            {p8.slice(0, 4).map((m) => (
-              <div key={m.id} className="p-2.5 bg-slate-850 rounded-lg border border-slate-700 text-xs scale-100 shadow-md">
-                <p className="truncate text-slate-200 font-semibold flex justify-between">
-                  <span>{TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</span>
-                  {m.team1Goals !== null && <span className="font-mono font-bold text-sky-400">{m.team1Goals}</span>}
-                </p>
-                <div className="h-px bg-slate-700/60 my-1.5" />
-                <p className="truncate text-slate-200 font-semibold flex justify-between">
-                  <span>{TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</span>
-                  {m.team2Goals !== null && <span className="font-mono font-bold text-sky-400">{m.team2Goals}</span>}
-                </p>
+            {/* Column 2: 8vos Left (4 matches: k16_1 to k16_4) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k16_1', 'left')}
+              {renderBracketMatchNode('k16_2', 'left')}
+              {renderBracketMatchNode('k16_3', 'left')}
+              {renderBracketMatchNode('k16_4', 'left')}
+            </div>
+
+            {/* Column 3: 4tos Left (2 matches: k8_1, k8_2) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k8_1', 'left')}
+              {renderBracketMatchNode('k8_2', 'left')}
+            </div>
+
+            {/* Column 4: Semis Left (1 match: k4_1) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k4_1', 'left')}
+            </div>
+
+            {/* Column 5: Center (Trophy, Final, 3er puesto) */}
+            <div className="flex flex-col justify-center items-center h-[820px] gap-6 px-1 text-center">
+              {/* Cup Graphic */}
+              <div className="flex flex-col items-center justify-center p-4 bg-slate-950/40 rounded-2xl border border-amber-500/10 shadow-lg">
+                <Trophy className="w-14 h-14 text-yellow-400 filter drop-shadow-[0_0_12px_rgba(234,179,8,0.35)] animate-pulse" />
+                <span className="text-[9px] font-mono text-amber-500 font-bold tracking-widest uppercase mt-2">Copa del Mundo</span>
               </div>
-            ))}
-          </div>
 
-          <div className="flex items-center text-slate-600">
-            <ArrowRight className="w-4 h-4" />
-          </div>
-
-          {/* Phase: 4tos */}
-          <div className="flex-1 flex flex-col justify-around gap-12 py-8">
-            <h4 className="text-center font-bold text-xs font-mono text-slate-400 bg-slate-800/80 py-1.5 rounded-lg border border-slate-700 font-sans">CUARTOS</h4>
-            {p4.slice(0, 2).map((m) => (
-              <div key={m.id} className="p-3 bg-slate-800 border-2 border-sky-500/20 rounded-xl text-xs shadow-lg">
-                <p className="truncate text-white font-bold flex justify-between">
-                  <span>{TEAMS[m.team1]?.emoji} {TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</span>
-                  {m.team1Goals !== null && <span className="font-mono text-sky-400">{m.team1Goals}</span>}
-                </p>
-                <div className="h-px bg-slate-700 my-1" />
-                <p className="truncate text-white font-bold flex justify-between">
-                  <span>{TEAMS[m.team2]?.emoji} {TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</span>
-                  {m.team2Goals !== null && <span className="font-mono text-sky-400">{m.team2Goals}</span>}
-                </p>
+              {/* Gran Final match node */}
+              <div className="space-y-1">
+                <span className="text-[10px] font-black font-sans tracking-widest text-amber-400 uppercase block">Gran Final</span>
+                {renderBracketMatchNode('k2_final', 'center')}
               </div>
-            ))}
-          </div>
 
-          <div className="flex items-center text-slate-600">
-            <ArrowRight className="w-4 h-4" />
-          </div>
-
-          {/* Phase: Semifinal */}
-          <div className="flex-1 flex flex-col justify-around gap-20 py-12">
-            <h4 className="text-center font-bold text-xs font-mono text-slate-400 bg-slate-800/80 py-1.5 rounded-lg border border-slate-700">SEMIFINAL</h4>
-            {pSemi.slice(0, 2).map((m) => (
-              <div key={m.id} className="p-3.5 bg-blue-950/40 border border-sky-400/40 rounded-xl text-xs shadow-xl animate-fade-in">
-                <p className="truncate text-white font-extrabold flex justify-between">
-                  <span>{TEAMS[m.team1]?.emoji} {TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</span>
-                  {m.team1Goals !== null && <span className="font-mono text-sky-300">{m.team1Goals}</span>}
-                </p>
-                <div className="h-px bg-sky-500/20 my-1.5" />
-                <p className="truncate text-white font-extrabold flex justify-between">
-                  <span>{TEAMS[m.team2]?.emoji} {TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</span>
-                  {m.team2Goals !== null && <span className="font-mono text-sky-300">{m.team2Goals}</span>}
-                </p>
+              {/* 3er puesto match node */}
+              <div className="space-y-1 pt-3 border-t border-slate-800/80 w-full flex flex-col items-center">
+                <span className="text-[9px] font-mono tracking-wider text-slate-500 uppercase block">3er y 4to Puesto</span>
+                {renderBracketMatchNode('k2_third', 'center')}
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="flex items-center text-slate-600">
-            <ArrowRight className="w-4 h-4" />
-          </div>
+            {/* Column 6: Semis Right (1 match: k4_2) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k4_2', 'right')}
+            </div>
 
-          {/* Phase: Gran Final */}
-          <div className="flex-1 flex flex-col justify-center gap-8 py-16">
-            <h4 className="text-center font-bold text-xs font-mono text-yellow-400 bg-yellow-950/50 py-1.5 rounded-lg border border-yellow-500/20">GRAN FINAL</h4>
-            {pFinal.map((m) => (
-              <div key={m.id} className="p-4 bg-gradient-to-r from-yellow-950/60 to-slate-900 border-2 border-yellow-500/40 rounded-2xl text-xs shadow-2xl relative">
-                <span className="absolute -top-3 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-yellow-500 text-slate-950 rounded-full font-bold text-[9px] uppercase tracking-wider">
-                  Campeón 🏆
-                </span>
-                <p className="truncate text-white font-extrabold flex justify-between text-sm mt-1">
-                  <span>{TEAMS[m.team1]?.emoji} {TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</span>
-                  {m.team1Goals !== null && <span className="font-mono text-yellow-300">{m.team1Goals}</span>}
-                </p>
-                <div className="h-px bg-yellow-500/20 my-2" />
-                <p className="truncate text-white font-extrabold flex justify-between text-sm">
-                  <span>{TEAMS[m.team2]?.emoji} {TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</span>
-                  {m.team2Goals !== null && <span className="font-mono text-yellow-300">{m.team2Goals}</span>}
-                </p>
-              </div>
-            ))}
+            {/* Column 7: 4tos Right (2 matches: k8_3, k8_4) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k8_3', 'right')}
+              {renderBracketMatchNode('k8_4', 'right')}
+            </div>
 
-            <div className="h-px bg-slate-800 my-4" />
+            {/* Column 8: 8vos Right (4 matches: k16_5 to k16_8) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k16_5', 'right')}
+              {renderBracketMatchNode('k16_6', 'right')}
+              {renderBracketMatchNode('k16_7', 'right')}
+              {renderBracketMatchNode('k16_8', 'right')}
+            </div>
 
-            {/* 3rd place */}
-            <h4 className="text-center font-bold text-[10px] font-mono text-slate-400 uppercase">3er Puesto</h4>
-            {pThird.map((m) => (
-              <div key={m.id} className="p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs shadow-inner">
-                <p className="truncate text-slate-300 font-semibold flex justify-between">
-                  <span>{TEAMS[m.team1]?.name || m.placeholderName1 || 'TBD'}</span>
-                  {m.team1Goals !== null && <span className="font-mono text-slate-300">{m.team1Goals}</span>}
-                </p>
-                <p className="truncate text-slate-300 font-semibold flex justify-between">
-                  <span>{TEAMS[m.team2]?.name || m.placeholderName2 || 'TBD'}</span>
-                  {m.team2Goals !== null && <span className="font-mono text-slate-300">{m.team2Goals}</span>}
-                </p>
-              </div>
-            ))}
+            {/* Column 9: 16vos Right (8 matches: k32_9 to k32_16) */}
+            <div className="flex flex-col justify-around h-[820px] gap-2">
+              {renderBracketMatchNode('k32_9', 'right')}
+              {renderBracketMatchNode('k32_10', 'right')}
+              {renderBracketMatchNode('k32_11', 'right')}
+              {renderBracketMatchNode('k32_12', 'right')}
+              {renderBracketMatchNode('k32_13', 'right')}
+              {renderBracketMatchNode('k32_14', 'right')}
+              {renderBracketMatchNode('k32_15', 'right')}
+              {renderBracketMatchNode('k32_16', 'right')}
+            </div>
           </div>
         </div>
       </div>
