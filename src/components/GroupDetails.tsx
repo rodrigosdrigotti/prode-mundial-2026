@@ -528,8 +528,8 @@ export default function GroupDetails({
 
               {activeTab.type === 'knockout' ? (
                 <BracketVisualizer
-                  matches={activeMatches}
-                  userPredictions={draftMatches}
+                  matches={matches}
+                  userPredictions={{ ...grpPreds.matches, ...draftMatches }}
                   isAdmin={currentUser.isAdmin}
                   isLocked={isKnockoutStageLocked}
                   onUpdateActualResult={onUpdateActualResult}
