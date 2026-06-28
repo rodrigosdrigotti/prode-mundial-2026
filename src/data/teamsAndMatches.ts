@@ -183,15 +183,34 @@ export const INITIAL_GROUP_MATCHES: Match[] = [
   { id: 'l_m6', group: 'L', team1: 'pan', team2: 'eng', team1Goals: null, team2Goals: null, date: '2026-06-27', time: '18:00', type: 'group' }
 ];
 
+export const PRESET_16AVOS = [
+  { team1: 'ger', team2: 'par' }, // k32_1
+  { team1: 'fra', team2: 'swe' }, // k32_2
+  { team1: 'rsa', team2: 'can' }, // k32_3
+  { team1: 'ned', team2: 'mar' }, // k32_4
+  { team1: 'por', team2: 'cro' }, // k32_5
+  { team1: 'esp', team2: 'aut' }, // k32_6
+  { team1: 'usa', team2: 'bih' }, // k32_7
+  { team1: 'bel', team2: 'sen' }, // k32_8
+  { team1: 'bra', team2: 'jpn' }, // k32_9
+  { team1: 'civ', team2: 'nor' }, // k32_10
+  { team1: 'mex', team2: 'ecu' }, // k32_11
+  { team1: 'eng', team2: 'cod' }, // k32_12
+  { team1: 'arg', team2: 'cpv' }, // k32_13
+  { team1: 'aus', team2: 'egy' }, // k32_14
+  { team1: 'sui', team2: 'alg' }, // k32_15
+  { team1: 'col', team2: 'gha' }  // k32_16
+];
+
 export const INITIAL_KNOCKOUT_MATCHES: Match[] = [
   // 16avos (Round of 32)
-  ...Array.from({ length: 16 }).map((_, i): Match => {
+  ...PRESET_16AVOS.map((preset, i): Match => {
     const nextMatchIdx = Math.floor(i / 2) + 1;
     return {
       id: `k32_${i + 1}`,
       group: '16avos',
-      team1: '',
-      team2: '',
+      team1: preset.team1,
+      team2: preset.team2,
       team1Goals: null,
       team2Goals: null,
       date: '2026-06-30',
