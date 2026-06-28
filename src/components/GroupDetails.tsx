@@ -540,6 +540,7 @@ export default function GroupDetails({
                     }));
                     setHasUnsavedChanges(true);
                   }}
+                  currentStage={activeTab.id}
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
