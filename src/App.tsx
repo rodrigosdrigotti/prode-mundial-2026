@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { User, Group, GroupPredictionStore, Match, TestSimulationReport } from './types';
 import { User, Group, GroupPredictionStore, Match, TestSimulationReport, MatchPrediction, ExtrasPrediction } from './types';
+import { TEAMS, GROUP_ALPHABETS, GROUP_TEAMS, INITIAL_GROUP_MATCHES, INITIAL_KNOCKOUT_MATCHES } from './data/teamsAndMatches';
 import { runCompleteQASimulation } from './utils/simulator';
 import { calculateGroupStandings } from './utils/tiebreakers';
 import Regulation from './components/Regulation';
@@ -191,7 +191,7 @@ export default function App() {
   const [users, setUsers] = useState<Record<string, User>>({});
   const [groups, setGroups] = useState<Group[]>([]);
   const [predictions, setPredictions] = useState<Record<string, Record<string, GroupPredictionStore>>>({});
-  const [isCollectionGroupFailed, setIsCollectionGroupFailed] = useState(false); // <--- NUEVO
+  const [isCollectionGroupFailed, setIsCollectionGroupFailed] = useState(false);
   const [matches, setMatches] = useState<Match[]>([]);
   
   // Game Lock states
@@ -200,7 +200,7 @@ export default function App() {
     isKnockoutStageLocked: false,
     isGroupCreationLocked: false,
     isKnockoutPhaseVisible: false,
-    cafecitoUsername: 'prodeonline-rs',
+    cafecitoUsername: 'rodrigos',
     mpAlias: 'prodeonline-rs.mp',
     cafecitoEnabled: true
   });
@@ -386,7 +386,7 @@ export default function App() {
           isKnockoutStageLocked: false,
           isGroupCreationLocked: false,
           isKnockoutPhaseVisible: false,
-          cafecitoUsername: 'prodeonline-rs',
+          cafecitoUsername: 'rodrigos',
           mpAlias: 'prodeonline-rs.mp',
           cafecitoEnabled: true
         });
@@ -423,10 +423,9 @@ export default function App() {
         }
       });
       setPredictions(nextPredictions);
-      setIsCollectionGroupFailed(false); // <--- NUEVO: Consulta exitosa
+      setIsCollectionGroupFailed(false);
     }, (err) => {
-      // NUEVO: Captura el error de Vercel/Firebase y activa el fallback de forma silenciosa
-      console.warn("⚠️ Fallback activado: No se pudo usar collectionGroup('predictions') (requiere índices). Usando sincronización directa por miembro.", err);
+      console.warn("⚠️ Fallback activado: No se pudo usar collectionGroup('predictions') (requiere o reglas avanzadas o índices). Usando sincronización dinámica por documento de usuario.", err);
       setIsCollectionGroupFailed(true);
     });
 
@@ -553,18 +552,9 @@ export default function App() {
         }
         setActivePage('home');
       }
-  } catch (err: any) {
-      // Usuario cerró manualmente el popup Google
-      if (
-        err.code === 'auth/popup-closed-by-user' ||
-        err.code === 'auth/cancelled-popup-request'
-      ) {
-        return;
-      }
+    } catch (err: any) {
       console.error(err);
-      setAuthError(
-        err.message || 'Error en autenticación de Google'
-      );
+      setAuthError(err.message || 'Error en autenticación de Google');
     }
   };
 
@@ -667,7 +657,6 @@ export default function App() {
 
       // Send customized high-fidelity confirmation email using Nodemailer API
       let emailSendErrorMsg = '';
-      
       try {
         const response = await fetch('/api/send-email', {
           method: 'POST',
@@ -681,35 +670,15 @@ export default function App() {
             code: verificationCode
           })
         });
-      
-        const responseText = await response.text();
-      
-        console.log("SMTP RESPONSE:", responseText);
-      
-        let mailRes: any = {};
-      
-        try {
-          mailRes = JSON.parse(responseText);
-        } catch {
-          throw new Error(responseText);
-        }
-      
+        const mailRes = await response.json();
         if (!response.ok) {
-          emailSendErrorMsg =
-            mailRes.details ||
-            mailRes.error ||
-            responseText ||
-            'Error SMTP desconocido del servidor.';
+          emailSendErrorMsg = mailRes.details || mailRes.error || 'Error SMTP desconocido del servidor.';
         } else if (mailRes.simulated) {
-          setLastSentCode(verificationCode);
+          setLastSentCode(verificationCode); // Saved to allow instant automatic bypass if testing offline
         }
-      
       } catch (mailErr: any) {
         console.error('Error al enviar correo de confirmación de cuenta:', mailErr);
-      
-        emailSendErrorMsg =
-          mailErr.message ||
-          'Error de conexión de red al intentar contactar al servidor de correo.';
+        emailSendErrorMsg = mailErr.message || 'Error de conexión de red al intentar contactar al servidor de correo.';
       }
 
       setAuthName('');
@@ -1190,7 +1159,50 @@ export default function App() {
     }
   };
 
- // Admin capability: Rename team names dynamically
+  // Admin capability: Modify match teams manually
+  const handleUpdateMatchTeams = async (
+    matchId: string,
+    team1: string,
+    team2: string,
+    placeholderName1?: string,
+    placeholderName2?: string
+  ) => {
+    try {
+      const updateObj: any = { team1, team2 };
+      if (placeholderName1 !== undefined) updateObj.placeholderName1 = placeholderName1;
+      if (placeholderName2 !== undefined) updateObj.placeholderName2 = placeholderName2;
+      await updateDoc(doc(db, 'matches', matchId), updateObj);
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`);
+    }
+  };
+
+  // Admin capability: Bulk update multiple matches (e.g., manual bracket configuration)
+  const handleUpdateMultipleMatches = async (
+    updatedMatches: Array<{
+      id: string;
+      team1: string;
+      team2: string;
+      placeholderName1?: string;
+      placeholderName2?: string;
+    }>
+  ) => {
+    try {
+      const batch = writeBatch(db);
+      updatedMatches.forEach(({ id, team1, team2, placeholderName1, placeholderName2 }) => {
+        const docRef = doc(db, 'matches', id);
+        const updateObj: any = { team1, team2 };
+        if (placeholderName1 !== undefined) updateObj.placeholderName1 = placeholderName1;
+        if (placeholderName2 !== undefined) updateObj.placeholderName2 = placeholderName2;
+        batch.update(docRef, updateObj);
+      });
+      await batch.commit();
+    } catch (err) {
+      handleFirestoreError(err, OperationType.WRITE, 'matches');
+    }
+  };
+
+  // Admin capability: Rename team names dynamically
   const handleUpdateTeamName = (teamId: string, newName: string) => {
     const teamObj = TEAMS[teamId];
     if (teamObj) {
@@ -1380,7 +1392,7 @@ export default function App() {
     }
   };
 
- // Admin capability: Modify actual extras category
+  // Admin capability: Modify actual extras category
   const handleUpdateActualExtras = async (field: string, value: string) => {
     try {
       await updateDoc(doc(db, 'extras', 'global'), { [field]: value });
@@ -1926,6 +1938,8 @@ export default function App() {
                 onUpdateMatchActualResult={handleUpdateMatchActualResult}
                 onUpdateMatchDateTime={handleUpdateMatchDateTime}
                 onUpdateTeamName={handleUpdateTeamName}
+                onUpdateMatchTeams={handleUpdateMatchTeams}
+                onUpdateMultipleMatches={handleUpdateMultipleMatches}
                 onGenerateEliminatories={handleGenerateBracketElements}
                 onToggleLock={handleToggleLock}
                 onDeleteUser={handleDeleteUser}
@@ -1936,7 +1950,7 @@ export default function App() {
                 onUpdateActualExtras={handleUpdateActualExtras}
                 onUpdateGroupName={handleUpdateGroupName}
                 onDeleteGroup={handleDeleteGroup}
-                cafecitoUsername={locks.cafecitoUsername ?? 'prodeonline-rs'}
+                cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
                 mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
                 cafecitoEnabled={locks.cafecitoEnabled ?? true}
                 onUpdateCafecitoSettings={handleUpdateCafecitoSettings}
@@ -2383,7 +2397,7 @@ export default function App() {
 
       {/* CAFECITO / MERCADO PAGO DONATION FLOATING WIDGET */}
       <CafecitoFloatingWidget
-        cafecitoUsername={locks.cafecitoUsername ?? 'prodeonline-rs'}
+        cafecitoUsername={locks.cafecitoUsername ?? 'rodrigos'}
         mpAlias={locks.mpAlias ?? 'prodeonline-rs.mp'}
         enabled={locks.cafecitoEnabled ?? true}
       />
