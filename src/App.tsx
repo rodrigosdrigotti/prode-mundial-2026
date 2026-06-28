@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { User, Group, GroupPredictionStore, Match, TestSimulationReport, MatchPrediction, ExtrasPrediction } from './types';
-import { TEAMS, GROUP_ALPHABETS, GROUP_TEAMS, INITIAL_GROUP_MATCHES, INITIAL_KNOCKOUT_MATCHES } from './data/teamsAndMatches';
+import { TEAMS, GROUP_ALPHABETS, GROUP_TEAMS, INITIAL_GROUP_MATCHES, INITIAL_KNOCKOUT_MATCHES, PRESET_16AVOS } from './data/teamsAndMatches';
 import { runCompleteQASimulation } from './utils/simulator';
 import { calculateGroupStandings } from './utils/tiebreakers';
 import Regulation from './components/Regulation';
@@ -367,6 +367,42 @@ export default function App() {
       });
       if (nextMatches.length > 0) {
         setMatches(nextMatches);
+
+        // Auto-fix 16avos matches if they are misconfigured (due to previous sorting/index bug)
+        if (currentUser?.isAdmin) {
+          const misconfigured = nextMatches.some((m) => {
+            if (m.group === '16avos') {
+              const matchNum = parseInt(m.id.replace('k32_', ''), 10);
+              if (!isNaN(matchNum) && matchNum >= 1 && matchNum <= 16) {
+                const preset = PRESET_16AVOS[matchNum - 1];
+                return m.team1 !== preset?.team1 || m.team2 !== preset?.team2;
+              }
+            }
+            return false;
+          });
+
+          if (misconfigured) {
+            console.log("[Auto-Fix] Misconfigured 16avos matches detected. Executing background correction...");
+            const batch = writeBatch(db);
+            nextMatches.forEach((m) => {
+              if (m.group === '16avos') {
+                const matchNum = parseInt(m.id.replace('k32_', ''), 10);
+                if (!isNaN(matchNum) && matchNum >= 1 && matchNum <= 16) {
+                  const preset = PRESET_16AVOS[matchNum - 1];
+                  if (preset && (m.team1 !== preset.team1 || m.team2 !== preset.team2)) {
+                    batch.update(doc(db, 'matches', m.id), {
+                      team1: preset.team1,
+                      team2: preset.team2
+                    });
+                  }
+                }
+              }
+            });
+            batch.commit()
+              .then(() => console.log("[Auto-Fix] Misconfigured 16avos matches corrected successfully."))
+              .catch((err) => console.error("[Auto-Fix] Failed to correct matches:", err));
+          }
+        }
       } else if (currentUser.isAdmin) {
         initializeDatabaseDefaults();
       }
@@ -1243,17 +1279,17 @@ export default function App() {
     const bestEightThirds = thirds.slice(0, 8).map((x) => x.teamId);
     const all32Classified = [...firsts, ...seconds, ...bestEightThirds];
 
-    let matchIdx = 0;
     const nextMatches = matches.map((m) => {
-      if (m.group === '16avos' && m.id === `k32_${matchIdx + 1}`) {
-        const t1 = all32Classified[matchIdx * 2] || '';
-        const t2 = all32Classified[matchIdx * 2 + 1] || '';
-        matchIdx++;
-        return {
-          ...m,
-          team1: t1,
-          team2: t2
-        };
+      if (m.group === '16avos') {
+        const matchNum = parseInt(m.id.replace('k32_', ''), 10);
+        if (!isNaN(matchNum) && matchNum >= 1 && matchNum <= 16) {
+          const preset = PRESET_16AVOS[matchNum - 1];
+          return {
+            ...m,
+            team1: preset ? preset.team1 : '',
+            team2: preset ? preset.team2 : ''
+          };
+        }
       }
       return m;
     });
