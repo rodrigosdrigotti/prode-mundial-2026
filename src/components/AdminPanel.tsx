@@ -119,15 +119,16 @@ export default function AdminPanel({
 
   const sortedTeams = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name));
   const [showManualEditor, setShowManualEditor] = useState(false);
-  const [manualK32Matches, setManualK32Matches] = useState<Array<{ id: string, team1: string, team2: string, placeholderName1: string, placeholderName2: string }>>([]);
-  const [isSavingManual16avos, setIsSavingManual16avos] = useState(false);
+  const [selectedStageForManualEdit, setSelectedStageForManualEdit] = useState<string>('16avos');
+  const [manualStageMatches, setManualStageMatches] = useState<Array<{ id: string, team1: string, team2: string, placeholderName1: string, placeholderName2: string }>>([]);
+  const [isSavingManualStage, setIsSavingManualStage] = useState(false);
   const [showConfirmReset, setShowConfirmReset] = useState(false);
 
-  // Sync manual 16avos list when editor is opened
+  // Sync manual stage list when editor is opened or stage is changed
   React.useEffect(() => {
     if (showManualEditor) {
-      const k32s = matches
-        .filter((m) => m.group === '16avos')
+      const stageMatches = matches
+        .filter((m) => m.group === selectedStageForManualEdit)
         .map((m) => ({
           id: m.id,
           team1: m.team1 || '',
@@ -135,14 +136,20 @@ export default function AdminPanel({
           placeholderName1: m.placeholderName1 || '',
           placeholderName2: m.placeholderName2 || ''
         }));
-      k32s.sort((a, b) => {
-        const numA = parseInt(a.id.replace('k32_', ''), 10);
-        const numB = parseInt(b.id.replace('k32_', ''), 10);
-        return numA - numB;
+      
+      // Sort matches by their suffix number or fallback
+      stageMatches.sort((a, b) => {
+        const getNum = (idStr: string) => {
+          if (idStr === 'k2_third') return 1;
+          if (idStr === 'k2_final') return 2;
+          const match = idStr.match(/\d+$/);
+          return match ? parseInt(match[0], 10) : 0;
+        };
+        return getNum(a.id) - getNum(b.id);
       });
-      setManualK32Matches(k32s);
+      setManualStageMatches(stageMatches);
     }
-  }, [showManualEditor, matches]);
+  }, [showManualEditor, selectedStageForManualEdit, matches]);
 
   // Cafecito & Mercado Pago local edit states (synced with props on render)
   const [localCafecitoUsername, setLocalCafecitoUsername] = useState(cafecitoUsername || 'rodrigos');
@@ -765,10 +772,10 @@ export default function AdminPanel({
               <div className="space-y-1">
                 <h4 className="font-bold text-sm text-amber-500 flex items-center gap-1.5 uppercase font-sans">
                   <Settings className="w-4 h-4" />
-                  Configurar 16avos Manualmente
+                  Configurar Cruces Manualmente
                 </h4>
                 <p className="text-xs text-slate-300 leading-relaxed">
-                  Configurá o editá los 16 partidos del bracket de la ronda de 16avos de final de forma 100% personalizada. Seleccioná de forma manual cada cruce de equipos y definí textos provisionales para equipos TBD (como "1ro Grupo A", etc.).
+                  Configurá o editá todos los partidos de cualquier ronda del bracket (16avos, 8vos, 4tos, Semis, 3er Puesto, Final) de forma 100% personalizada. Seleccioná de forma manual cada cruce de equipos y definí textos provisionales.
                 </p>
               </div>
               
@@ -784,7 +791,7 @@ export default function AdminPanel({
                 }`}
               >
                 <Settings className="w-4 h-4" />
-                {showManualEditor ? 'Cerrar Editor Manual' : 'Configurar 16 Partidos de 16avos'}
+                {showManualEditor ? 'Cerrar Editor Manual' : 'Configurar Llaves del Bracket'}
               </button>
             </div>
           </div>
@@ -912,10 +919,10 @@ export default function AdminPanel({
               <div>
                 <h3 className="text-base font-bold text-white flex items-center gap-2">
                   <Settings className="w-5 h-5 text-amber-500" />
-                  Editor de Llaves: Armado Manual de 16avos
+                  Editor de Llaves: Armado Manual del Bracket
                 </h3>
                 <p className="text-xs text-slate-400">
-                  Definí los equipos de los 16 partidos de dieciseisavos de final. Cuando termines, presioná "Guardar y Publicar 16avos".
+                  Definí los equipos de los partidos para cualquier ronda. Cuando termines, presioná "Guardar y Publicar".
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -925,14 +932,14 @@ export default function AdminPanel({
                     <button
                       type="button"
                       onClick={() => {
-                        const cleared = Array.from({ length: 16 }).map((_, i) => ({
-                          id: `k32_${i + 1}`,
+                        const cleared = manualStageMatches.map((m) => ({
+                          ...m,
                           team1: '',
                           team2: '',
-                          placeholderName1: `Clasificado ${i * 2 + 1}`,
-                          placeholderName2: `Clasificado ${i * 2 + 2}`
+                          placeholderName1: m.placeholderName1 || 'Equipo 1',
+                          placeholderName2: m.placeholderName2 || 'Equipo 2'
                         }));
-                        setManualK32Matches(cleared);
+                        setManualStageMatches(cleared);
                         setShowConfirmReset(false);
                       }}
                       className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded text-[9px] transition-all uppercase cursor-pointer"
@@ -953,18 +960,39 @@ export default function AdminPanel({
                     onClick={() => setShowConfirmReset(true)}
                     className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/20 hover:border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg transition-transform active:scale-95 cursor-pointer"
                   >
-                    Restablecer / Vaciar Todo
+                    Restablecer / Vaciar Ronda
                   </button>
                 )}
               </div>
             </div>
 
+            {/* Stage Selector Tabs */}
+            <div className="flex flex-wrap gap-1.5 p-1 bg-slate-900/60 rounded-xl border border-slate-800">
+              {['16avos', '8vos', '4tos', 'Semifinal', '3er y 4to puesto', 'Final'].map((stage) => (
+                <button
+                  key={stage}
+                  type="button"
+                  onClick={() => {
+                    setSelectedStageForManualEdit(stage);
+                    setShowConfirmReset(false);
+                  }}
+                  className={`flex-1 min-w-[100px] text-center py-2 px-3 rounded-lg text-xs font-bold transition-all uppercase cursor-pointer ${
+                    selectedStageForManualEdit === stage
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/10'
+                      : 'text-slate-400 hover:text-white hover:bg-slate-800/50'
+                  }`}
+                >
+                  {stage}
+                </button>
+              ))}
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-              {manualK32Matches.map((m, idx) => {
+              {manualStageMatches.map((m, idx) => {
                 return (
                   <div
                     key={m.id}
-                    className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3"
+                    className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3 animate-fade-in"
                   >
                     <div className="text-[10px] font-mono font-bold text-slate-500 uppercase flex justify-between items-center border-b border-slate-800 pb-1.5">
                       <span>Partido {idx + 1}</span>
@@ -977,9 +1005,9 @@ export default function AdminPanel({
                       <select
                         value={m.team1}
                         onChange={(e) => {
-                          const updated = [...manualK32Matches];
+                          const updated = [...manualStageMatches];
                           updated[idx] = { ...updated[idx], team1: e.target.value };
-                          setManualK32Matches(updated);
+                          setManualStageMatches(updated);
                         }}
                         className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
                       >
@@ -995,9 +1023,9 @@ export default function AdminPanel({
                           type="text"
                           value={m.placeholderName1}
                           onChange={(e) => {
-                            const updated = [...manualK32Matches];
+                            const updated = [...manualStageMatches];
                             updated[idx] = { ...updated[idx], placeholderName1: e.target.value };
-                            setManualK32Matches(updated);
+                            setManualStageMatches(updated);
                           }}
                           placeholder="Ej: 1ro Grupo A"
                           className="w-full bg-slate-950/50 border border-slate-900 text-[10px] text-slate-400 rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 font-mono"
@@ -1014,9 +1042,9 @@ export default function AdminPanel({
                       <select
                         value={m.team2}
                         onChange={(e) => {
-                          const updated = [...manualK32Matches];
+                          const updated = [...manualStageMatches];
                           updated[idx] = { ...updated[idx], team2: e.target.value };
-                          setManualK32Matches(updated);
+                          setManualStageMatches(updated);
                         }}
                         className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
                       >
@@ -1032,9 +1060,9 @@ export default function AdminPanel({
                           type="text"
                           value={m.placeholderName2}
                           onChange={(e) => {
-                            const updated = [...manualK32Matches];
+                            const updated = [...manualStageMatches];
                             updated[idx] = { ...updated[idx], placeholderName2: e.target.value };
-                            setManualK32Matches(updated);
+                            setManualStageMatches(updated);
                           }}
                           placeholder="Ej: 2do Grupo B"
                           className="w-full bg-slate-950/50 border border-slate-900 text-[10px] text-slate-400 rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 font-mono"
@@ -1050,22 +1078,22 @@ export default function AdminPanel({
               <button
                 type="button"
                 onClick={async () => {
-                  setIsSavingManual16avos(true);
+                  setIsSavingManualStage(true);
                   try {
-                    await onUpdateMultipleMatches(manualK32Matches);
-                    alert('🏆 ¡Los 16 partidos de 16avos de final han sido generados y guardados con éxito!');
+                    await onUpdateMultipleMatches(manualStageMatches);
+                    alert(`🏆 ¡Los partidos de la ronda ${selectedStageForManualEdit} han sido guardados con éxito!`);
                     setShowManualEditor(false);
                   } catch (err) {
-                    alert('Error al guardar 16avos: ' + err);
+                    alert('Error al guardar la ronda: ' + err);
                   } finally {
-                    setIsSavingManual16avos(false);
+                    setIsSavingManualStage(false);
                   }
                 }}
-                disabled={isSavingManual16avos}
+                disabled={isSavingManualStage}
                 className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-lg transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-amber-500/15 cursor-pointer text-xs uppercase"
               >
                 <CheckCircle className="w-4 h-4" />
-                {isSavingManual16avos ? 'Guardando...' : 'Guardar y Publicar 16avos de Final'}
+                {isSavingManualStage ? 'Guardando...' : `Guardar y Publicar Ronda ${selectedStageForManualEdit}`}
               </button>
             </div>
           </div>
