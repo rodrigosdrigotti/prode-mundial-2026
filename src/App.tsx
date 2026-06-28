@@ -1475,30 +1475,31 @@ export default function App() {
     alert('¡Limpieza completada con éxito!');
   };
 
-  // FORCE REGENERATE DELETED MATCHES IN FIRESTORE
+  // FORCE REGENERATE DELETED MATCHES IN FIRESTORE (SAFE FOR GROUP STAGE)
   const handleForceRegenerateMatches = async () => {
     if (!currentUser?.isAdmin) {
       alert('Solo los administradores pueden forzar la regeneración de los partidos.');
       return;
     }
     const confirmRegen = confirm(
-      '⚠️ ¿Estás seguro/a de que querés regenerar todos los partidos en Firebase?\n\n' +
-      'Esto sobrescribirá o agregará los 72 partidos predeterminados (fase de grupos y eliminatorias).\n' +
-      'Los resultados reales cargados de estos partidos volverán a estar vacíos.'
+      '⚠️ ¿Estás seguro/a de que querés regenerar los partidos de ELIMINATORIAS (Playoffs) en Firebase?\n\n' +
+      'Esto restablecerá los partidos del bracket (16avos, 8vos, 4tos, Semis, Final) al formato inicial oficial (PRESET_16AVOS).\n' +
+      '✓ La FASE DE GRUPOS NO se verá afectada.\n' +
+      '✓ Los resultados reales de la fase de grupos NO se perderán.\n' +
+      '✓ Los puntajes y predicciones de los usuarios NO se verán afectados.'
     );
     if (!confirmRegen) return;
 
     try {
       const batch = writeBatch(db);
       const initialMatchesList = [
-        ...INITIAL_GROUP_MATCHES,
         ...INITIAL_KNOCKOUT_MATCHES
       ];
       initialMatchesList.forEach((m) => {
         batch.set(doc(db, 'matches', m.id), m);
       });
       await batch.commit();
-      alert('✅ ¡Todos los partidos oficiales han sido regenerados y restaurados con éxito en la base de datos de Firestore!');
+      alert('✅ ¡Los partidos de Eliminatorias (Playoffs) han sido regenerados con éxito! El bracket de 16avos ya tiene los cruces oficiales con las banderas cargadas.');
     } catch (err) {
       console.error(err);
       alert('No se pudieron regenerar los partidos: ' + (err instanceof Error ? err.message : String(err)));
