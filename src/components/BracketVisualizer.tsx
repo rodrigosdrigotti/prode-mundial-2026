@@ -10,11 +10,11 @@ import { Trophy, HelpCircle, ArrowRight } from 'lucide-react';
 
 interface BracketVisualizerProps {
   matches: Match[];
-  userPredictions?: Record<string, { team1Goals: number | null; team2Goals: number | null }>;
+  userPredictions?: Record<string, { team1Goals: number | null; team2Goals: number | null; team1Penalties?: number | null; team2Penalties?: number | null }>;
   isAdmin: boolean;
   isLocked: boolean;
-  onUpdatePrediction?: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
-  onUpdateActualResult?: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
+  onUpdatePrediction?: (matchId: string, team1Goals: number | null, team2Goals: number | null, team1Penalties?: number | null, team2Penalties?: number | null) => void;
+  onUpdateActualResult?: (matchId: string, team1Goals: number | null, team2Goals: number | null, team1Penalties?: number | null, team2Penalties?: number | null) => void;
   currentStage?: string;
 }
 
@@ -101,8 +101,15 @@ export default function BracketVisualizer({
     const t1 = TEAMS[m.team1];
     const t2 = TEAMS[m.team2];
 
-    const isT1Winner = m.team1Goals !== null && m.team2Goals !== null && m.team1Goals > m.team2Goals;
-    const isT2Winner = m.team1Goals !== null && m.team2Goals !== null && m.team2Goals > m.team1Goals;
+    const hasActualPenalties = m.team1Penalties !== null && m.team2Penalties !== null && m.team1Penalties !== undefined && m.team2Penalties !== undefined;
+    const isT1Winner = m.team1Goals !== null && m.team2Goals !== null && (
+      m.team1Goals > m.team2Goals || 
+      (m.team1Goals === m.team2Goals && hasActualPenalties && m.team1Penalties! > m.team2Penalties!)
+    );
+    const isT2Winner = m.team1Goals !== null && m.team2Goals !== null && (
+      m.team2Goals > m.team1Goals || 
+      (m.team1Goals === m.team2Goals && hasActualPenalties && m.team2Penalties! > m.team1Penalties!)
+    );
 
     // Find the user prediction to show a tiny badge or indicator
     const pred = userPredictions[m.id];
@@ -142,8 +149,11 @@ export default function BracketVisualizer({
               </span>
             </div>
             {m.team1Goals !== null && (
-              <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border ${isT1Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'}`}>
-                {m.team1Goals}
+              <span className={`font-mono text-[11px] font-bold px-1 py-0.5 rounded bg-slate-950/60 border ${isT1Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'} flex items-center gap-1`}>
+                <span>{m.team1Goals}</span>
+                {m.team1Goals === m.team2Goals && m.team1Penalties !== undefined && m.team1Penalties !== null && (
+                  <span className="text-[9px] text-amber-500 font-sans font-bold">({m.team1Penalties})</span>
+                )}
               </span>
             )}
           </div>
@@ -159,8 +169,11 @@ export default function BracketVisualizer({
               </span>
             </div>
             {m.team2Goals !== null && (
-              <span className={`font-mono text-xs font-bold px-1.5 py-0.5 rounded bg-slate-950/60 border ${isT2Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'}`}>
-                {m.team2Goals}
+              <span className={`font-mono text-[11px] font-bold px-1 py-0.5 rounded bg-slate-950/60 border ${isT2Winner ? 'text-amber-400 border-amber-500/20' : 'text-slate-400 border-slate-800'} flex items-center gap-1`}>
+                <span>{m.team2Goals}</span>
+                {m.team1Goals === m.team2Goals && m.team2Penalties !== undefined && m.team2Penalties !== null && (
+                  <span className="text-[9px] text-amber-500 font-sans font-bold">({m.team2Penalties})</span>
+                )}
               </span>
             )}
           </div>
@@ -194,7 +207,8 @@ export default function BracketVisualizer({
     matchId: string,
     isTeam1: boolean,
     valStr: string,
-    isActual: boolean
+    isActual: boolean,
+    isPenalties: boolean = false
   ) => {
     const trimmed = valStr.trim();
     let val: number | null = null;
@@ -207,15 +221,31 @@ export default function BracketVisualizer({
     if (isActual && isAdmin) {
       const match = matches.find((m) => m.id === matchId);
       if (match) {
-        const team1G = isTeam1 ? val : match.team1Goals;
-        const team2G = isTeam1 ? match.team2Goals : val;
-        onUpdateActualResult?.(matchId, team1G, team2G);
+        if (isPenalties) {
+          const team1P = isTeam1 ? val : (match.team1Penalties ?? null);
+          const team2P = isTeam1 ? (match.team2Penalties ?? null) : val;
+          onUpdateActualResult?.(matchId, match.team1Goals, match.team2Goals, team1P, team2P);
+        } else {
+          const team1G = isTeam1 ? val : match.team1Goals;
+          const team2G = isTeam1 ? match.team2Goals : val;
+          const team1P = (team1G !== null && team2G !== null && team1G === team2G) ? (match.team1Penalties ?? null) : null;
+          const team2P = (team1G !== null && team2G !== null && team1G === team2G) ? (match.team2Penalties ?? null) : null;
+          onUpdateActualResult?.(matchId, team1G, team2G, team1P, team2P);
+        }
       }
     } else if (!isActual && !isLocked && onUpdatePrediction) {
       const currentPred = userPredictions[matchId] || { team1Goals: null, team2Goals: null };
-      const team1G = isTeam1 ? val : currentPred.team1Goals;
-      const team2G = isTeam1 ? currentPred.team2Goals : val;
-      onUpdatePrediction(matchId, team1G, team2G);
+      if (isPenalties) {
+        const team1P = isTeam1 ? val : (currentPred.team1Penalties ?? null);
+        const team2P = isTeam1 ? (currentPred.team2Penalties ?? null) : val;
+        onUpdatePrediction(matchId, currentPred.team1Goals, currentPred.team2Goals, team1P, team2P);
+      } else {
+        const team1G = isTeam1 ? val : currentPred.team1Goals;
+        const team2G = isTeam1 ? currentPred.team2Goals : val;
+        const team1P = (team1G !== null && team2G !== null && team1G === team2G) ? (currentPred.team1Penalties ?? null) : null;
+        const team2P = (team1G !== null && team2G !== null && team1G === team2G) ? (currentPred.team2Penalties ?? null) : null;
+        onUpdatePrediction(matchId, team1G, team2G, team1P, team2P);
+      }
     }
   };
 
@@ -314,6 +344,81 @@ export default function BracketVisualizer({
           </div>
         </div>
 
+        {/* Penalties Predictor / Actual */}
+        {((pred.team1Goals !== null && pred.team2Goals !== null && pred.team1Goals === pred.team2Goals) ||
+          (match.team1Goals !== null && match.team2Goals !== null && match.team1Goals === match.team2Goals)) && (
+          <div className="mt-1 bg-slate-900/50 rounded-lg p-2.5 border border-slate-700/50 space-y-2 animate-fade-in">
+            <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block font-sans">
+              🏆 Definición por Penales
+            </span>
+            <div className="flex flex-col gap-2">
+              {/* Prediction Penalties Row */}
+              {pred.team1Goals !== null && pred.team2Goals !== null && pred.team1Goals === pred.team2Goals && (
+                <div className="flex items-center justify-between text-xs text-slate-300">
+                  <span className="truncate max-w-[120px]">Mi Pred. Penales</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={isLocked}
+                      value={pred.team1Penalties ?? ''}
+                      placeholder="-"
+                      onChange={(e) => handleInputChange(match.id, true, e.target.value, false, true)}
+                      className="w-10 h-7 rounded bg-slate-950 border border-slate-800 text-center text-white font-bold text-xs focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    />
+                    <span className="text-slate-500 px-0.5">:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={isLocked}
+                      value={pred.team2Penalties ?? ''}
+                      placeholder="-"
+                      onChange={(e) => handleInputChange(match.id, false, e.target.value, false, true)}
+                      className="w-10 h-7 rounded bg-slate-950 border border-slate-800 text-center text-white font-bold text-xs focus:outline-none focus:border-amber-500 disabled:opacity-50"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Actual Penalties Row */}
+              {match.team1Goals !== null && match.team2Goals !== null && match.team1Goals === match.team2Goals && (isAdmin || hasActual) && (
+                <div className="flex items-center justify-between text-xs text-sky-400">
+                  <span className="truncate max-w-[120px]">Real Penales</span>
+                  <div className="flex items-center gap-1">
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={!isAdmin}
+                      value={match.team1Penalties ?? ''}
+                      placeholder="-"
+                      onChange={(e) => handleInputChange(match.id, true, e.target.value, true, true)}
+                      className={`w-10 h-7 rounded text-center text-xs font-bold focus:outline-none ${
+                        isAdmin
+                          ? 'bg-sky-950/80 border border-sky-400 text-sky-300 focus:border-sky-300'
+                          : 'bg-slate-950/60 border border-slate-850 text-slate-300 disabled:opacity-90'
+                      }`}
+                    />
+                    <span className="text-slate-500 px-0.5">:</span>
+                    <input
+                      type="number"
+                      min="0"
+                      disabled={!isAdmin}
+                      value={match.team2Penalties ?? ''}
+                      placeholder="-"
+                      onChange={(e) => handleInputChange(match.id, false, e.target.value, true, true)}
+                      className={`w-10 h-7 rounded text-center text-xs font-bold focus:outline-none ${
+                        isAdmin
+                          ? 'bg-sky-950/80 border border-sky-400 text-sky-300 focus:border-sky-300'
+                          : 'bg-slate-950/60 border border-slate-850 text-slate-300 disabled:opacity-90'
+                      }`}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Score indicator badge for matching prediction */}
         {hasActual && pred.team1Goals !== null && pred.team2Goals !== null && (
           <div className="mt-2 text-center pt-2 border-t border-slate-700/40">
@@ -327,16 +432,35 @@ export default function BracketVisualizer({
               const predWin = p1 > p2 ? '1' : p1 < p2 ? '2' : 'D';
 
               if (actualWin === predWin) {
+                // Check if they got the penalty shootout winner right for +1 bonus
+                let gotPenaltyBonus = false;
+                if (match.type === 'knockout' && a1 === a2 && p1 === p2) {
+                  const p1Pen = pred.team1Penalties;
+                  const p2Pen = pred.team2Penalties;
+                  const a1Pen = match.team1Penalties;
+                  const a2Pen = match.team2Penalties;
+                  if (
+                    p1Pen !== undefined && p2Pen !== undefined && p1Pen !== null && p2Pen !== null &&
+                    a1Pen !== undefined && a2Pen !== undefined && a1Pen !== null && a2Pen !== null
+                  ) {
+                    const actualPenWinner = a1Pen > a2Pen ? '1' : a1Pen < a2Pen ? '2' : null;
+                    const predPenWinner = p1Pen > p2Pen ? '1' : p1Pen < p2Pen ? '2' : null;
+                    if (actualPenWinner && predPenWinner && actualPenWinner === predPenWinner) {
+                      gotPenaltyBonus = true;
+                    }
+                  }
+                }
+
                 if (p1 === a1 && p2 === a2) {
                   return (
                     <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-full font-semibold">
-                      ¡Marcador Exacto! (+5 pts)
+                      ¡Marcador Exacto! {gotPenaltyBonus ? '+6 pts (Penales ✓)' : '(+5 pts)'}
                     </span>
                   );
                 }
                 return (
                   <span className="text-xs bg-sky-500/20 text-sky-300 border border-sky-500/30 px-2 py-1 rounded-full font-semibold">
-                    Resultado Acertado (+3 pts)
+                    Resultado Acertado {gotPenaltyBonus ? '+4 pts (Penales ✓)' : '(+3 pts)'}
                   </span>
                 );
               }
