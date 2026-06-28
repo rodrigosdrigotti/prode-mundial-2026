@@ -36,6 +36,22 @@ interface AdminPanelProps {
   onUpdateMatchActualResult: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
   onUpdateMatchDateTime: (matchId: string, date: string, time: string) => void;
   onUpdateTeamName: (teamId: string, newName: string) => void;
+  onUpdateMatchTeams: (
+    matchId: string,
+    team1: string,
+    team2: string,
+    placeholderName1?: string,
+    placeholderName2?: string
+  ) => void;
+  onUpdateMultipleMatches: (
+    updatedMatches: Array<{
+      id: string;
+      team1: string;
+      team2: string;
+      placeholderName1?: string;
+      placeholderName2?: string;
+    }>
+  ) => Promise<void>;
   onGenerateEliminatories: () => void;
   onToggleLock: (stage: 'group' | 'knockout' | 'groupCreation' | 'knockoutPhaseVisible') => void;
   onDeleteUser: (userId: string) => void;
@@ -63,7 +79,6 @@ interface AdminPanelProps {
   ) => void;
 }
 
-
 export default function AdminPanel({
   matches,
   users,
@@ -75,6 +90,8 @@ export default function AdminPanel({
   onUpdateMatchActualResult,
   onUpdateMatchDateTime,
   onUpdateTeamName,
+  onUpdateMatchTeams,
+  onUpdateMultipleMatches,
   onGenerateEliminatories,
   onToggleLock,
   onDeleteUser,
@@ -100,6 +117,33 @@ export default function AdminPanel({
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
 
+  const sortedTeams = Object.values(TEAMS).sort((a, b) => a.name.localeCompare(b.name));
+  const [showManualEditor, setShowManualEditor] = useState(false);
+  const [manualK32Matches, setManualK32Matches] = useState<Array<{ id: string, team1: string, team2: string, placeholderName1: string, placeholderName2: string }>>([]);
+  const [isSavingManual16avos, setIsSavingManual16avos] = useState(false);
+  const [showConfirmReset, setShowConfirmReset] = useState(false);
+
+  // Sync manual 16avos list when editor is opened
+  React.useEffect(() => {
+    if (showManualEditor) {
+      const k32s = matches
+        .filter((m) => m.group === '16avos')
+        .map((m) => ({
+          id: m.id,
+          team1: m.team1 || '',
+          team2: m.team2 || '',
+          placeholderName1: m.placeholderName1 || '',
+          placeholderName2: m.placeholderName2 || ''
+        }));
+      k32s.sort((a, b) => {
+        const numA = parseInt(a.id.replace('k32_', ''), 10);
+        const numB = parseInt(b.id.replace('k32_', ''), 10);
+        return numA - numB;
+      });
+      setManualK32Matches(k32s);
+    }
+  }, [showManualEditor, matches]);
+
   // Cafecito & Mercado Pago local edit states (synced with props on render)
   const [localCafecitoUsername, setLocalCafecitoUsername] = useState(cafecitoUsername || 'rodrigos');
   const [localMpAlias, setLocalMpAlias] = useState(mpAlias || 'prodeonline-rs.mp');
@@ -108,7 +152,7 @@ export default function AdminPanel({
 
   // Sync state modifications dynamically
   React.useEffect(() => {
-    setLocalCafecitoUsername(cafecitoUsername || 'prodeonline-rs');
+    setLocalCafecitoUsername(cafecitoUsername || 'rodrigos');
     setLocalMpAlias(mpAlias || 'prodeonline-rs.mp');
     setLocalCafecitoEnabled(cafecitoEnabled !== false);
   }, [cafecitoUsername, mpAlias, cafecitoEnabled]);
@@ -175,7 +219,7 @@ export default function AdminPanel({
             <Play className="w-3.5 h-3.5" />
             Simulación 100% (QA)
           </button>
-
+          
           {onForceRegenerateMatches && (
             <button
               onClick={onForceRegenerateMatches}
@@ -186,7 +230,7 @@ export default function AdminPanel({
               Regenerar Partidos Eliminados
             </button>
           )}
-          
+
           <button
             onClick={onResetData}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs rounded-lg transition-transform focus:ring focus:ring-rose-500/50"
@@ -313,33 +357,109 @@ export default function AdminPanel({
 
                     {/* Team Rows */}
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center gap-2">
-                        <span className="text-sm font-semibold truncate">
-                          {team1Info ? `${team1Info.emoji} ${team1Info.name}` : m.placeholderName1 || 'TBD'}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={m.team1Goals ?? ''}
-                          onChange={(e) => handleGoalsChange(m.id, true, e.target.value)}
-                          placeholder="-"
-                          className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
-                        />
-                      </div>
+                      {m.type === 'knockout' ? (
+                        <div className="flex flex-col gap-2 bg-slate-900/40 p-2 rounded-lg border border-slate-800/80">
+                          {/* Team 1 Selection */}
+                          <div className="flex justify-between items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <select
+                                value={m.team1 || ''}
+                                onChange={(e) => onUpdateMatchTeams(m.id, e.target.value, m.team2, m.placeholderName1, m.placeholderName2)}
+                                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-amber-500 font-sans cursor-pointer"
+                              >
+                                <option value="">-- {m.placeholderName1 || 'TBD (Sin Equipo)'} --</option>
+                                {sortedTeams.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.emoji} {t.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!m.team1 && (
+                                <input
+                                  type="text"
+                                  value={m.placeholderName1 || ''}
+                                  onChange={(e) => onUpdateMatchTeams(m.id, m.team1, m.team2, e.target.value, m.placeholderName2)}
+                                  placeholder="Texto TBD Equipo 1"
+                                  className="w-full mt-1 bg-slate-950/60 border border-slate-900 text-[10px] text-slate-400 rounded px-1.5 py-0.5 focus:outline-none focus:border-amber-500/50 font-mono"
+                                />
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              value={m.team1Goals ?? ''}
+                              onChange={(e) => handleGoalsChange(m.id, true, e.target.value)}
+                              placeholder="-"
+                              className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                            />
+                          </div>
 
-                      <div className="flex justify-between items-center gap-2">
-                        <span className="text-sm font-semibold truncate">
-                          {team2Info ? `${team2Info.emoji} ${team2Info.name}` : m.placeholderName2 || 'TBD'}
-                        </span>
-                        <input
-                          type="number"
-                          min="0"
-                          value={m.team2Goals ?? ''}
-                          onChange={(e) => handleGoalsChange(m.id, false, e.target.value)}
-                          placeholder="-"
-                          className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
-                        />
-                      </div>
+                          {/* Team 2 Selection */}
+                          <div className="flex justify-between items-center gap-2">
+                            <div className="flex-1 min-w-0">
+                              <select
+                                value={m.team2 || ''}
+                                onChange={(e) => onUpdateMatchTeams(m.id, m.team1, e.target.value, m.placeholderName1, m.placeholderName2)}
+                                className="w-full bg-slate-950 border border-slate-800 text-slate-200 text-xs rounded px-2 py-1 focus:outline-none focus:border-amber-500 font-sans cursor-pointer"
+                              >
+                                <option value="">-- {m.placeholderName2 || 'TBD (Sin Equipo)'} --</option>
+                                {sortedTeams.map((t) => (
+                                  <option key={t.id} value={t.id}>
+                                    {t.emoji} {t.name}
+                                  </option>
+                                ))}
+                              </select>
+                              {!m.team2 && (
+                                <input
+                                  type="text"
+                                  value={m.placeholderName2 || ''}
+                                  onChange={(e) => onUpdateMatchTeams(m.id, m.team1, m.team2, m.placeholderName1, e.target.value)}
+                                  placeholder="Texto TBD Equipo 2"
+                                  className="w-full mt-1 bg-slate-950/60 border border-slate-900 text-[10px] text-slate-400 rounded px-1.5 py-0.5 focus:outline-none focus:border-amber-500/50 font-mono"
+                                />
+                              )}
+                            </div>
+                            <input
+                              type="number"
+                              min="0"
+                              value={m.team2Goals ?? ''}
+                              onChange={(e) => handleGoalsChange(m.id, false, e.target.value)}
+                              placeholder="-"
+                              className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="text-sm font-semibold truncate text-slate-200">
+                              {team1Info ? `${team1Info.emoji} ${team1Info.name}` : m.placeholderName1 || 'TBD'}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={m.team1Goals ?? ''}
+                              onChange={(e) => handleGoalsChange(m.id, true, e.target.value)}
+                              placeholder="-"
+                              className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                            />
+                          </div>
+
+                          <div className="flex justify-between items-center gap-2">
+                            <span className="text-sm font-semibold truncate text-slate-200">
+                              {team2Info ? `${team2Info.emoji} ${team2Info.name}` : m.placeholderName2 || 'TBD'}
+                            </span>
+                            <input
+                              type="number"
+                              min="0"
+                              value={m.team2Goals ?? ''}
+                              onChange={(e) => handleGoalsChange(m.id, false, e.target.value)}
+                              placeholder="-"
+                              className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     {/* Date / Time editor */}
@@ -615,26 +735,58 @@ export default function AdminPanel({
 
       {/* 5. LOCKDOWNS & AUTOMATIONS */}
       {activeTab === 'locks' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-fade-in">
-          {/* Automated knockout generator card */}
-          <div className="bg-slate-850 p-5 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
-            <div className="space-y-1">
-              <h4 className="font-bold text-sm text-yellow-400 flex items-center gap-1.5 uppercase font-sans">
-                <Trophy className="w-4 h-4" />
-                Generar Bracket Directo (16avos)
-              </h4>
-              <p className="text-xs text-slate-300 leading-relaxed">
-                Examina los resultados de los partidos jugados en la Fase de Grupos. Ordena las posiciones de cada uno de los 12 grupos de manera oficial, selecciona los top 1 y 2 de cada zona, filtra los 8 mejores tercer clasificados y genera automáticamente el armado de los enfrentamientos de la ronda de 16avos.
-              </p>
+        <div className="space-y-6 animate-fade-in">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {/* Generation Column */}
+          <div className="space-y-6">
+            {/* Automated knockout generator card */}
+            <div className="bg-slate-850 p-5 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-yellow-400 flex items-center gap-1.5 uppercase font-sans">
+                  <Trophy className="w-4 h-4" />
+                  Generar Bracket Directo (16avos)
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Examina los resultados de los partidos jugados en la Fase de Grupos. Ordena las posiciones de cada uno de los 12 grupos de manera oficial, selecciona los top 1 y 2 de cada zona, filtra los 8 mejores tercer clasificados y genera automáticamente el armado de los enfrentamientos de la ronda de 16avos.
+                </p>
+              </div>
+              
+              <button
+                onClick={onGenerateEliminatories}
+                className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:zoom text-white text-xs font-black uppercase rounded-lg shadow-lg active:scale-95 transition-transform cursor-pointer"
+              >
+                <Hammer className="w-4 h-4" />
+                Generar Cruces Oficiales (Bracket Real)
+              </button>
             </div>
-            
-            <button
-              onClick={onGenerateEliminatories}
-              className="w-full flex items-center justify-center gap-2 py-3 bg-gradient-to-r from-sky-500 to-blue-600 hover:zoom text-white text-xs font-black uppercase rounded-lg shadow-lg active:scale-95 transition-transform"
-            >
-              <Hammer className="w-4 h-4" />
-              Generar Cruces Oficiales (Bracket Real)
-            </button>
+
+            {/* Manual knockout generator card */}
+            <div className="bg-slate-850 p-5 rounded-xl border border-slate-800 space-y-4 flex flex-col justify-between">
+              <div className="space-y-1">
+                <h4 className="font-bold text-sm text-amber-500 flex items-center gap-1.5 uppercase font-sans">
+                  <Settings className="w-4 h-4" />
+                  Configurar 16avos Manualmente
+                </h4>
+                <p className="text-xs text-slate-300 leading-relaxed">
+                  Configurá o editá los 16 partidos del bracket de la ronda de 16avos de final de forma 100% personalizada. Seleccioná de forma manual cada cruce de equipos y definí textos provisionales para equipos TBD (como "1ro Grupo A", etc.).
+                </p>
+              </div>
+              
+              <button
+                onClick={() => {
+                  setShowManualEditor(!showManualEditor);
+                  setShowConfirmReset(false);
+                }}
+                className={`w-full flex items-center justify-center gap-2 py-3 rounded-lg text-xs font-black uppercase transition-all shadow-lg active:scale-95 cursor-pointer ${
+                  showManualEditor
+                    ? 'bg-rose-950 text-rose-300 border border-rose-500/30 hover:bg-rose-900/40'
+                    : 'bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black'
+                }`}
+              >
+                <Settings className="w-4 h-4" />
+                {showManualEditor ? 'Cerrar Editor Manual' : 'Configurar 16 Partidos de 16avos'}
+              </button>
+            </div>
           </div>
 
           {/* Locks manager cards */}
@@ -751,8 +903,175 @@ export default function AdminPanel({
 
             </div>
           </div>
+        </div>
 
-          {/* Donaciones & cafecito configuration card */}
+        {/* Manual Editor Panel Expansion */}
+        {showManualEditor && (
+          <div className="bg-slate-850 p-6 rounded-xl border border-slate-800 space-y-6 animate-fade-in">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+              <div>
+                <h3 className="text-base font-bold text-white flex items-center gap-2">
+                  <Settings className="w-5 h-5 text-amber-500" />
+                  Editor de Llaves: Armado Manual de 16avos
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Definí los equipos de los 16 partidos de dieciseisavos de final. Cuando termines, presioná "Guardar y Publicar 16avos".
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {showConfirmReset ? (
+                  <div className="flex items-center gap-1.5 bg-rose-950/60 p-1.5 rounded-lg border border-rose-500/20">
+                    <span className="text-[10px] text-rose-300 font-bold font-mono">¿Confirmas reiniciar todo?</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const cleared = Array.from({ length: 16 }).map((_, i) => ({
+                          id: `k32_${i + 1}`,
+                          team1: '',
+                          team2: '',
+                          placeholderName1: `Clasificado ${i * 2 + 1}`,
+                          placeholderName2: `Clasificado ${i * 2 + 2}`
+                        }));
+                        setManualK32Matches(cleared);
+                        setShowConfirmReset(false);
+                      }}
+                      className="bg-rose-600 hover:bg-rose-500 text-white font-bold px-2.5 py-1 rounded text-[9px] transition-all uppercase cursor-pointer"
+                    >
+                      Sí, Vaciar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmReset(false)}
+                      className="text-slate-400 hover:text-white font-bold px-2 py-1 text-[9px] transition-all uppercase cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmReset(true)}
+                    className="px-3 py-1.5 bg-rose-950/40 hover:bg-rose-900 border border-rose-500/20 hover:border-rose-500/30 text-rose-300 text-xs font-bold rounded-lg transition-transform active:scale-95 cursor-pointer"
+                  >
+                    Restablecer / Vaciar Todo
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+              {manualK32Matches.map((m, idx) => {
+                return (
+                  <div
+                    key={m.id}
+                    className="p-3 bg-slate-900/60 rounded-xl border border-slate-800 space-y-3"
+                  >
+                    <div className="text-[10px] font-mono font-bold text-slate-500 uppercase flex justify-between items-center border-b border-slate-800 pb-1.5">
+                      <span>Partido {idx + 1}</span>
+                      <span className="text-amber-500/80">{m.id}</span>
+                    </div>
+
+                    {/* Team 1 Section */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 font-semibold block">Local (Equipo 1)</label>
+                      <select
+                        value={m.team1}
+                        onChange={(e) => {
+                          const updated = [...manualK32Matches];
+                          updated[idx] = { ...updated[idx], team1: e.target.value };
+                          setManualK32Matches(updated);
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="">-- TBD (Texto Provisional) --</option>
+                        {sortedTeams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.emoji} {t.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!m.team1 && (
+                        <input
+                          type="text"
+                          value={m.placeholderName1}
+                          onChange={(e) => {
+                            const updated = [...manualK32Matches];
+                            updated[idx] = { ...updated[idx], placeholderName1: e.target.value };
+                            setManualK32Matches(updated);
+                          }}
+                          placeholder="Ej: 1ro Grupo A"
+                          className="w-full bg-slate-950/50 border border-slate-900 text-[10px] text-slate-400 rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 font-mono"
+                        />
+                      )}
+                    </div>
+
+                    {/* VS Divider */}
+                    <div className="text-center font-mono text-[9px] font-black text-slate-600">VS</div>
+
+                    {/* Team 2 Section */}
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-mono text-slate-400 font-semibold block">Visitante (Equipo 2)</label>
+                      <select
+                        value={m.team2}
+                        onChange={(e) => {
+                          const updated = [...manualK32Matches];
+                          updated[idx] = { ...updated[idx], team2: e.target.value };
+                          setManualK32Matches(updated);
+                        }}
+                        className="w-full bg-slate-950 border border-slate-800 text-white text-xs rounded px-2.5 py-1.5 focus:outline-none focus:border-amber-500 cursor-pointer"
+                      >
+                        <option value="">-- TBD (Texto Provisional) --</option>
+                        {sortedTeams.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.emoji} {t.name}
+                          </option>
+                        ))}
+                      </select>
+                      {!m.team2 && (
+                        <input
+                          type="text"
+                          value={m.placeholderName2}
+                          onChange={(e) => {
+                            const updated = [...manualK32Matches];
+                            updated[idx] = { ...updated[idx], placeholderName2: e.target.value };
+                            setManualK32Matches(updated);
+                          }}
+                          placeholder="Ej: 2do Grupo B"
+                          className="w-full bg-slate-950/50 border border-slate-900 text-[10px] text-slate-400 rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 font-mono"
+                        />
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex justify-end pt-4 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSavingManual16avos(true);
+                  try {
+                    await onUpdateMultipleMatches(manualK32Matches);
+                    alert('🏆 ¡Los 16 partidos de 16avos de final han sido generados y guardados con éxito!');
+                    setShowManualEditor(false);
+                  } catch (err) {
+                    alert('Error al guardar 16avos: ' + err);
+                  } finally {
+                    setIsSavingManual16avos(false);
+                  }
+                }}
+                disabled={isSavingManual16avos}
+                className="px-5 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black rounded-lg transition-all active:scale-95 flex items-center gap-1.5 shadow-md shadow-amber-500/15 cursor-pointer text-xs uppercase"
+              >
+                <CheckCircle className="w-4 h-4" />
+                {isSavingManual16avos ? 'Guardando...' : 'Guardar y Publicar 16avos de Final'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Donaciones & cafecito configuration card */}
           <div className="bg-slate-850 p-5 rounded-xl border border-slate-800 space-y-4 mt-6">
             <h4 className="font-bold text-sm text-amber-450 flex items-center gap-1.5 uppercase">
               <Coffee className="w-4 h-4 text-amber-400" />
@@ -802,7 +1121,7 @@ export default function AdminPanel({
                     className="bg-slate-900 border border-slate-800 rounded px-3 py-2 text-white font-mono text-xs focus:border-amber-500 focus:outline-none"
                   />
                   <span className="text-[9.5px] text-slate-500 font-mono mt-0.5">
-                    Link: https://cafecito.app/{localCafecitoUsername || 'prodeonline-rs'}
+                    Link: https://cafecito.app/{localCafecitoUsername || 'usuario'}
                   </span>
                 </div>
 
@@ -846,6 +1165,7 @@ export default function AdminPanel({
               </div>
             </div>
           </div>
+
         </div>
       )}
 
