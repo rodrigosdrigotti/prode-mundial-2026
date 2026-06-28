@@ -1079,7 +1079,13 @@ export default function App() {
   };
 
   // Update Match Prediction (User level)
-  const handleUpdatePrediction = async (matchId: string, team1Goals: number | null, team2Goals: number | null) => {
+  const handleUpdatePrediction = async (
+    matchId: string,
+    team1Goals: number | null,
+    team2Goals: number | null,
+    team1Penalties?: number | null,
+    team2Penalties?: number | null
+  ) => {
     if (!currentUser || !activeGroupId) return;
 
     const predRef = doc(db, 'users', currentUser.id, 'predictions', activeGroupId);
@@ -1092,7 +1098,9 @@ export default function App() {
 
     groupPreds.matches[matchId] = {
       team1Goals,
-      team2Goals
+      team2Goals,
+      team1Penalties: team1Penalties !== undefined ? team1Penalties : (groupPreds.matches[matchId]?.team1Penalties ?? null),
+      team2Penalties: team2Penalties !== undefined ? team2Penalties : (groupPreds.matches[matchId]?.team2Penalties ?? null)
     };
 
     try {
@@ -1178,9 +1186,60 @@ export default function App() {
   };
 
   // Admin capabilities: Save official match result in system
-  const handleUpdateMatchActualResult = async (matchId: string, team1Goals: number | null, team2Goals: number | null) => {
+  const handleUpdateMatchActualResult = async (
+    matchId: string,
+    team1Goals: number | null,
+    team2Goals: number | null,
+    team1Penalties?: number | null,
+    team2Penalties?: number | null
+  ) => {
     try {
-      await updateDoc(doc(db, 'matches', matchId), { team1Goals, team2Goals });
+      const updateObj: any = { team1Goals, team2Goals };
+      if (team1Penalties !== undefined) updateObj.team1Penalties = team1Penalties;
+      if (team2Penalties !== undefined) updateObj.team2Penalties = team2Penalties;
+
+      await updateDoc(doc(db, 'matches', matchId), updateObj);
+
+      // --- AUTO BRACKET PROGRESSION FOR ACTUAL MATCH ---
+      const matchObj = matches.find((m) => m.id === matchId);
+      if (matchObj && matchObj.type === 'knockout' && matchObj.nextMatchId) {
+        let winnerId = '';
+        if (team1Goals !== null && team2Goals !== null) {
+          if (team1Goals > team2Goals) {
+            winnerId = matchObj.team1;
+          } else if (team2Goals > team1Goals) {
+            winnerId = matchObj.team2;
+          } else {
+            const t1P = team1Penalties !== undefined ? team1Penalties : (matchObj.team1Penalties ?? null);
+            const t2P = team2Penalties !== undefined ? team2Penalties : (matchObj.team2Penalties ?? null);
+            if (t1P !== null && t2P !== null) {
+              if (t1P > t2P) {
+                winnerId = matchObj.team1;
+              } else if (t2P > t1P) {
+                winnerId = matchObj.team2;
+              }
+            }
+          }
+        }
+
+        if (winnerId) {
+          const nextMatch = matches.find((x) => x.id === matchObj.nextMatchId);
+          if (nextMatch) {
+            const matchNumStr = matchId.match(/\d+/);
+            if (matchNumStr) {
+              const matchNum = parseInt(matchNumStr[0], 10);
+              const isTeam1Slot = matchNum % 2 !== 0;
+              const updatePropagate: any = {};
+              if (isTeam1Slot) {
+                updatePropagate.team1 = winnerId;
+              } else {
+                updatePropagate.team2 = winnerId;
+              }
+              await updateDoc(doc(db, 'matches', matchObj.nextMatchId), updatePropagate);
+            }
+          }
+        }
+      }
     } catch (err) {
       handleFirestoreError(err, OperationType.WRITE, `matches/${matchId}`);
     }
