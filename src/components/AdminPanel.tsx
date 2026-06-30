@@ -33,7 +33,7 @@ interface AdminPanelProps {
   isKnockoutStageLocked: boolean;
   isGroupCreationLocked: boolean;
   isKnockoutPhaseVisible: boolean;
-  onUpdateMatchActualResult: (matchId: string, team1Goals: number | null, team2Goals: number | null) => void;
+  onUpdateMatchActualResult: (matchId: string, team1Goals: number | null, team2Goals: number | null, team1Penalties?: number | null, team2Penalties?: number | null) => void;
   onUpdateMatchDateTime: (matchId: string, date: string, time: string) => void;
   onUpdateTeamName: (teamId: string, newName: string) => void;
   onUpdateMatchTeams: (
@@ -178,7 +178,29 @@ export default function AdminPanel({
     if (match) {
       const is1Goals = isTeam1 ? val : match.team1Goals;
       const is2Goals = isTeam1 ? match.team2Goals : val;
-      onUpdateMatchActualResult(matchId, is1Goals, is2Goals);
+      
+      const isTie = is1Goals !== null && is2Goals !== null && is1Goals === is2Goals;
+      const t1P = isTie ? (match.team1Penalties ?? null) : null;
+      const t2P = isTie ? (match.team2Penalties ?? null) : null;
+
+      onUpdateMatchActualResult(matchId, is1Goals, is2Goals, t1P, t2P);
+    }
+  };
+
+  const handlePenaltiesChange = (matchId: string, isTeam1: boolean, valueStr: string) => {
+    const trimmed = valueStr.trim();
+    let val: number | null = null;
+    if (trimmed !== '') {
+      const parsed = parseInt(trimmed, 10);
+      if (isNaN(parsed) || parsed < 0) return;
+      val = parsed;
+    }
+
+    const match = matches.find((m) => m.id === matchId);
+    if (match) {
+      const is1Pens = isTeam1 ? val : (match.team1Penalties ?? null);
+      const is2Pens = isTeam1 ? (match.team2Penalties ?? null) : val;
+      onUpdateMatchActualResult(matchId, match.team1Goals, match.team2Goals, is1Pens, is2Pens);
     }
   };
 
@@ -435,6 +457,39 @@ export default function AdminPanel({
                               className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
                             />
                           </div>
+                          
+                          {/* Actual penalties shootout inputs if tied */}
+                          {m.team1Goals !== null && m.team2Goals !== null && m.team1Goals === m.team2Goals && (
+                            <div className="mt-2 pt-2 border-t border-slate-800 space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="text-[10px] font-bold text-amber-500 uppercase tracking-wider block font-sans">
+                                  🏆 Definición por Penales
+                                </span>
+                              </div>
+                              <div className="flex justify-between items-center gap-2 bg-slate-950/40 p-2 rounded border border-slate-800">
+                                <span className="text-xs text-slate-400 font-medium">Goles de Penales:</span>
+                                <div className="flex items-center gap-1.5">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={m.team1Penalties ?? ''}
+                                    onChange={(e) => handlePenaltiesChange(m.id, true, e.target.value)}
+                                    placeholder="-"
+                                    className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                                  />
+                                  <span className="text-slate-500 text-sm font-bold">:</span>
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    value={m.team2Penalties ?? ''}
+                                    onChange={(e) => handlePenaltiesChange(m.id, false, e.target.value)}
+                                    placeholder="-"
+                                    className="w-12 h-8 rounded bg-sky-950/80 border border-sky-400 text-sky-300 font-bold text-sm text-center focus:outline-none focus:border-sky-300"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <>
